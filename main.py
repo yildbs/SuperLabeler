@@ -3,7 +3,7 @@ import os
 import glob
 import shutil
 from PyQt5.QtWidgets import *
-from PyQt5.QtCore import QDir, Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import QDir, Qt, QTimer, QObject
 from PyQt5.QtGui import *
 from PyQt5 import uic, QtCore, QtGui, QtWidgets
 
@@ -151,7 +151,6 @@ class MainWindow(QMainWindow, main_form_class):
             table.setItem(index, 0, QTableWidgetItem(str))
             table.setItem(index, 1, QTableWidgetItem("True" if self.property_folder[str] else "False"))
 
-
     def refresh_page(self):
         if len(self.foregrounds) > 0:
             if self.property_paging['current_index_foreground'] < 0:
@@ -162,7 +161,6 @@ class MainWindow(QMainWindow, main_form_class):
             self.listWidget_foregrounds.clicked.emit(self.listWidget_foregrounds.currentIndex())
         else:
             self.property_paging['current_index_foreground'] = 0
-
 
     def on_foreground_selected(self, index):
         filename =  self.cur_dir + '/' + index.data()

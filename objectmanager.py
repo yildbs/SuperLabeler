@@ -92,7 +92,8 @@ class Object():
             self.selected = True
             return self.moved_rb
         elif self.x1 < x < self.x2 and self.y1 < y < self.y2:
-            self.selected = True
+            # self.selected = True
+            self.selected = not self.selected
             return self.moved_rect
         return None
 
@@ -410,9 +411,11 @@ class ObjectManager():
         for obj in self.__objects:
             if obj.selected:
                 obj.set_as_g()
+                obj.reset_property()
 
     def set_as_ng(self):
         for obj in self.__objects:
             if obj.selected:
                 obj.set_as_ng()
+                obj.reset_property()
 
