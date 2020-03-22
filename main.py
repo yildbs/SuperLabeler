@@ -343,7 +343,7 @@ class MainWindow(QMainWindow, main_form_class):
                 self.scene_foreground.addItem(item_lb)
                 self.scene_foreground.addItem(item_rb)
 
-            if self.property_folder['for_yolobgs']:
+            if self.property_folder['for_yolobgs'] and len(self.backgrounds) > 0:
                 differences = self.objects_foreground.getdifference(self.objects_background, 480, 270)
 
                 try:
@@ -367,7 +367,7 @@ class MainWindow(QMainWindow, main_form_class):
             else:
                 self.scene_diffground.clear()
 
-        if self.property_folder['for_yolobgs']:
+        if self.property_folder['for_yolobgs'] and len(self.backgrounds) > 0:
             if self.background_changed:
                 self.background_changed = False
 
