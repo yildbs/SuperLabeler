@@ -116,6 +116,3 @@ def get_distance(p1, p2):
     bx, by = p2
     return math.sqrt(pow(bx-ax, 2) + pow(by-ay, 2))
 
-# def get_distance(ax, ay, bx, by):
-#     return math.sqrt(pow(bx-ax, 2) + pow(by-ay, 2))
-

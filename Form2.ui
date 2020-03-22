@@ -109,6 +109,9 @@
               <height>250</height>
              </size>
             </property>
+            <property name="editTriggers">
+             <set>QAbstractItemView::NoEditTriggers</set>
+            </property>
            </widget>
           </item>
           <item>
@@ -232,7 +235,7 @@
            </widget>
           </item>
           <item>
-           <widget class="QGraphicsView" name="graphicsView_diff">
+           <widget class="QGraphicsView" name="graphicsView_diffground">
             <property name="minimumSize">
              <size>
               <width>480</width>

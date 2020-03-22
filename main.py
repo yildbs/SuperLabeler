@@ -3,12 +3,11 @@ import os
 import glob
 import shutil
 from PyQt5.QtWidgets import *
-from PyQt5.QtCore import QDir, Qt, QTimer, QObject
+from PyQt5.QtCore import QDir, Qt, QTimer, QObject, QEvent
 from PyQt5.QtGui import *
 from PyQt5 import uic, QtCore, QtGui, QtWidgets
-
+import time
 from copy import deepcopy
-
 import objectmanager
 
 main_form_class = uic.loadUiType('Form2.ui')[0]
@@ -41,8 +40,15 @@ class MainWindow(QMainWindow, main_form_class):
 
         self.scene_foreground = QGraphicsScene()
         self.graphicsView_foreground.setScene(self.scene_foreground)
-
         self.foreground_changed = False
+
+        self.scene_background = QGraphicsScene()
+        self.graphicsView_background.setScene(self.scene_background)
+        self.background_changed = False
+
+        self.scene_diffground = QGraphicsScene()
+        self.graphicsView_diffground.setScene(self.scene_diffground)
+        self.diffground_changed = False
 
         self.about_mouse = {}
         self.about_mouse['pressed_left'] = False
@@ -52,6 +58,8 @@ class MainWindow(QMainWindow, main_form_class):
 
         self.property_paging = {}
         self.property_paging['current_index_foreground'] = 0
+        self.property_paging['current_index_background'] = 0
+        self.property_paging['current_index_directories'] = 0
 
         self.property_folder_strings = []
         self.property_folder_strings.append('for_yolo')
@@ -70,6 +78,8 @@ class MainWindow(QMainWindow, main_form_class):
 
         self.fg_bg_converted =False
 
+        self.directories = []
+
         # shortcut
         self.set_shortcuts()
 
@@ -80,6 +90,7 @@ class MainWindow(QMainWindow, main_form_class):
         self.listWidget_backgrounds.clicked.connect(self.on_background_selected)
         self.listWidget_foregrounds.clicked.connect(self.on_foreground_selected)
 
+        # Callback
         self.treeView_DirectoryTree.keyPressEvent = self.keyPressEvent
         self.treeView_DirectoryTree.keyReleaseEvent = self.keyReleaseEvent
         self.listWidget_backgrounds.keyPressEvent = self.keyPressEvent
@@ -87,7 +98,7 @@ class MainWindow(QMainWindow, main_form_class):
         self.listWidget_foregrounds.keyPressEvent = self.keyPressEvent
         self.listWidget_foregrounds.keyReleaseEvent = self.keyReleaseEvent
 
-        #multithreading
+        # multithreading
         self.timer = QTimer()
         self.timer.setInterval(30)
         self.timer.timeout.connect(self.thread_refresh_display)
@@ -96,11 +107,17 @@ class MainWindow(QMainWindow, main_form_class):
     def refresh(self):
         basedir = self.lineEdit_BaseDirectory.text()
 
+        def on_directory_loaded():
+            self.tree.expandAll()
+
         self.model.setRootPath(basedir)
+        self.model.directoryLoaded.connect(on_directory_loaded)
+
         self.model.setFilter(QDir.Dirs | QDir.NoDotAndDotDot)
 
         self.tree.setModel(self.model)
         self.tree.setRootIndex(self.model.index(basedir))
+
         self.tree.header().hideSection(1)
         self.tree.header().hideSection(2)
         self.tree.header().hideSection(3)
@@ -114,6 +131,26 @@ class MainWindow(QMainWindow, main_form_class):
         self.dir_selected(filepath)
 
     def dir_selected(self, dir):
+
+        def deep(root, directories):
+            row = self.model.rowCount(root)
+            for y in range(row):
+                child = root.child(y, 0)
+                deep(child, directories)
+
+            path = self.model.filePath(root)
+            if len(glob.glob(path + '/*.jpg')) > 0:
+                directories.append(root)
+
+        directories = []
+        root = self.model.index(self.model.rootPath())
+        deep(root, directories)
+        self.directories = directories
+
+        for index, directory in enumerate(self.directories):
+            if self.model.filePath(directory) == dir:
+                self.property_paging['current_index_directories'] = index
+
         self.cur_dir = dir
         self.foregrounds = sorted([os.path.basename(x) for x in glob.glob(dir + '/*.jpg')])
         self.backgrounds = sorted([os.path.basename(x) for x in glob.glob(dir + '/*.bgs.jpg')])
@@ -162,25 +199,47 @@ class MainWindow(QMainWindow, main_form_class):
         else:
             self.property_paging['current_index_foreground'] = 0
 
+        if len(self.backgrounds) > 0:
+            if self.property_paging['current_index_background'] < 0:
+                self.property_paging['current_index_background'] = 0
+            elif self.property_paging['current_index_background'] >= len(self.backgrounds):
+                # self.property_paging['current_index_background'] = len(self.backgrounds) - 1
+                self.property_paging['current_index_background'] = 0
+
+            self.listWidget_backgrounds.setCurrentRow(self.property_paging['current_index_background'])
+            self.listWidget_backgrounds.clicked.emit(self.listWidget_backgrounds.currentIndex())
+        else:
+            self.property_paging['current_index_background'] = 0
+
+    def refresh_folder(self):
+        if len(self.directories) > 0:
+            if self.property_paging['current_index_directories'] < 0:
+                self.property_paging['current_index_directories'] = 0
+            elif self.property_paging['current_index_directories'] >= len(self.directories):
+                self.property_paging['current_index_directories'] = len(self.directories) - 1
+            index = self.directories[self.property_paging['current_index_directories']]
+            self.tree.setCurrentIndex(index)
+            self.tree.clicked.emit(self.tree.currentIndex())
+        else:
+            self.property_paging['current_index_directories'] = 0
+
     def on_foreground_selected(self, index):
         filename =  self.cur_dir + '/' + index.data()
         if self.current_foreground_path != filename:
-            print(filename)
             self.property_paging['current_index_foreground'] = index.row()
             self.current_foreground_path = filename
             self.new_foreground()
 
     def on_background_selected(self, index):
-        filename =  self.cur_dir + '/' + index.data()
-        if self.current_background_path != filename:
-            print(filename)
+        if self.property_folder['for_yolobgs']:
+            filename =  self.cur_dir + '/' + index.data()
+            self.property_paging['current_index_background'] = index.row()
             self.current_background_path = filename
-            self.background_changed()
+            self.new_background()
 
     def new_foreground(self):
         image = QImage(self.current_foreground_path)
         if not image.isNull():
-
             # item_rect.mouseMoveEvent = self.on_item_rect_moved
             self.scene_foreground.mouseMoveEvent = self.on_mouse_moved
             self.scene_foreground.mousePressEvent = self.on_mouse_pressed
@@ -188,6 +247,15 @@ class MainWindow(QMainWindow, main_form_class):
 
             self.graphicsView_foreground.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_foreground.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.graphicsView_foreground.wheelEvent = lambda p : []
+
+            self.graphicsView_background.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.graphicsView_background.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.graphicsView_background.wheelEvent = lambda p : []
+
+            self.graphicsView_diffground.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.graphicsView_diffground.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.graphicsView_diffground.wheelEvent = lambda p : []
 
             size = image.size()
             width_org = size.width()
@@ -195,15 +263,25 @@ class MainWindow(QMainWindow, main_form_class):
 
             self.objects_foreground.initialize(self.current_foreground_path.replace('jpg', 'xml'), width_org, height_org, 960, 540, self.fg_bg_converted)
 
-
             self.foreground_image = image.scaled(960, 540)
-            item_foreground = QGraphicsPixmapItem(QPixmap.fromImage(self.foreground_image))
 
             self.foreground_changed = True
             self.fg_bg_converted = False
 
-    def background_changed(self):
-        pass
+    def new_background(self):
+        image = QImage(self.current_background_path)
+        if not image.isNull():
+            self.graphicsView_background.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.graphicsView_background.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+            size = image.size()
+            width_org = size.width()
+            height_org = size.height()
+
+            self.objects_background.initialize(self.current_background_path.replace('jpg', 'xml'), width_org, height_org, 480, 270, do_not_save_xml=True)
+            self.background_image = image.scaled(480, 270)
+
+            self.background_changed = True
 
     class DoubleClickableItem(QGraphicsRectItem):
         def __init__(self, rect, parent, set_label, get_label):
@@ -236,8 +314,6 @@ class MainWindow(QMainWindow, main_form_class):
 
             objects = self.objects_foreground.getobjects()
             for obj in objects:
-                # rect
-                # item_rect = QGraphicsRectItem(QtCore.QRectF(obj.x1, obj.y1, obj.x2-obj.x1, obj.y2-obj.y1))
                 item_rect = self.DoubleClickableItem(QtCore.QRectF(obj.x1, obj.y1, obj.x2-obj.x1, obj.y2-obj.y1),
                                                      parent=self,
                                                      set_label=obj.set_label,
@@ -245,7 +321,7 @@ class MainWindow(QMainWindow, main_form_class):
                 item_rect.setPen(obj.prop['line_color'])
                 if obj.selected:
                     item_rect.setBrush(obj.prop['highlight_color'])
-                elif obj.prop['area_fullfill']:
+                elif obj.prop['area_fulfil']:
                     item_rect.setBrush(obj.prop['area_color'])
 
                 # label
@@ -267,9 +343,47 @@ class MainWindow(QMainWindow, main_form_class):
                 self.scene_foreground.addItem(item_lb)
                 self.scene_foreground.addItem(item_rb)
 
+            if self.property_folder['for_yolobgs']:
+                differences = self.objects_foreground.getdifference(self.objects_background, 480, 270)
 
-    def refresh_display_background(self):
-        pass
+                try:
+                    self.scene_diffground.clear()
+
+                    self.diffground_image = self.background_image.copy()
+                    painter = QPainter(self.diffground_image)
+                    painter.drawImage(0, 0, self.foreground_image.scaled(480, 270))
+
+                    item_diffground = QGraphicsPixmapItem(QPixmap.fromImage(self.diffground_image))
+                    self.scene_diffground.addItem(item_diffground)
+
+                    objects = differences
+                    for obj in objects:
+                        item_rect = QGraphicsRectItem(QtCore.QRectF(obj.x1, obj.y1, obj.x2-obj.x1, obj.y2-obj.y1))
+                        item_rect.setPen(QColor("red"))
+
+                        self.scene_diffground.addItem(item_rect)
+                except:
+                    pass
+            else:
+                self.scene_diffground.clear()
+
+        if self.property_folder['for_yolobgs']:
+            if self.background_changed:
+                self.background_changed = False
+
+                self.scene_background.clear()
+                item_background = QGraphicsPixmapItem(QPixmap.fromImage(self.background_image))
+                self.scene_background.addItem(item_background)
+
+                objects = self.objects_background.getobjects(for_background=True)
+                for obj in objects:
+                    # rect
+                    item_rect = QGraphicsRectItem(QtCore.QRectF(obj.x1, obj.y1, obj.x2-obj.x1, obj.y2-obj.y1))
+                    item_rect.setPen(obj.prop['line_color'])
+
+                    self.scene_background.addItem(item_rect)
+        else:
+            self.scene_background.clear()
 
     def refresh_display_diff(self):
         pass
@@ -299,12 +413,13 @@ class MainWindow(QMainWindow, main_form_class):
         self.about_mouse['pressed_ctrl'] = self.ctrl_pressed
 
         try:
-            if p.text() == '1' :
-                print('')
             self.functions[p.text()]()
         except Exception as e:
             print(e)
-            pass
+
+    def focusNextPrevChild(self, bool): # tab key
+        self.go_to_next_backgground()
+        return False
 
     def keyReleaseEvent(self, p):
         self.ctrl_pressed = p.modifiers() == Qt.ControlModifier
@@ -331,6 +446,9 @@ class MainWindow(QMainWindow, main_form_class):
         self.functions['r'] = self.set_as_ng
         self.functions['t'] = self.set_as_g
 
+        self.functions['z'] = self.go_to_previous_folder
+        self.functions['x'] = self.go_to_next_folder
+
         for index, string in enumerate(self.property_folder_strings):
             self.functions[str(index+1)] = (lambda s: (lambda: self.toggle_property(s)))(string)
 
@@ -341,6 +459,20 @@ class MainWindow(QMainWindow, main_form_class):
     def go_to_next_foreground(self):
         self.property_paging['current_index_foreground'] += 1
         self.refresh_page()
+
+    def go_to_previous_backgground(self):
+        try:
+            self.property_paging['current_index_background'] -= 1
+            self.refresh_page()
+        except:
+            pass
+
+    def go_to_next_backgground(self):
+        try:
+            self.property_paging['current_index_background'] += 1
+            self.refresh_page()
+        except:
+            pass
 
     def delete_selected(self):
         self.objects_foreground.delete_selected()
@@ -371,6 +503,14 @@ class MainWindow(QMainWindow, main_form_class):
             self.fg_bg_converted =True
             self.treeView_DirectoryTree.clicked.emit(self.treeView_DirectoryTree.currentIndex())
 
+    def go_to_previous_folder(self):
+        self.property_paging['current_index_directories'] -= 1
+        self.refresh_folder()
+
+    def go_to_next_folder(self):
+        self.property_paging['current_index_directories'] += 1
+        self.refresh_folder()
+
     def set_as_background(self):
         src_jpg = self.current_foreground_path
         if '.bgs' not in src_jpg:
@@ -396,8 +536,6 @@ class MainWindow(QMainWindow, main_form_class):
         print(key)
         if self.property_folder[key]:
             try:
-                # os.remove(self.cur_dir + '/' + key + '/.*')
-                # os.removedirs(self.cur_dir + '/' + key)
                 shutil.rmtree(self.cur_dir + '/' + key)
             except Exception as e:
                 print(e)
@@ -407,6 +545,7 @@ class MainWindow(QMainWindow, main_form_class):
             except Exception as e:
                 print(e)
         self.refresh_property_folder()
+        self.refresh_page()
 
 
 if __name__ == "__main__":

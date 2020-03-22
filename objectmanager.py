@@ -2,6 +2,8 @@ from threading import Thread, Lock
 from copy import deepcopy
 import util
 from PyQt5.QtGui import QColor
+import math
+
 
 class Object():
 
@@ -52,7 +54,7 @@ class Object():
 
         self.prop['highlight_color'] = QColor.fromRgb(232, 255, 158, 150)
 
-        self.prop['area_fullfill'] = False
+        self.prop['area_fulfil'] = False
 
         self.prop['vertex_color'] = QColor("green")
         self.prop['vertex_r_lt'] = self.circle_small
@@ -64,7 +66,7 @@ class Object():
             self.prop['text_color'] = QColor.fromRgb(173, 148, 108)
             self.prop['area_color'] = QColor.fromRgb(173, 148, 108, 80)
             self.prop['line_color'] = QColor.fromRgb(173, 148, 108)
-            self.prop['area_fullfill'] = True
+            self.prop['area_fulfil'] = True
         elif '_NG' in self.label:
             self.prop['text_color'] = QColor("red")
             self.prop['line_color'] = QColor("red")
@@ -117,7 +119,7 @@ class Object():
             self.prop['vertex_r_rb'] = self.circle_big
             return True
         elif self.x1 < x < self.x2 and self.y1 < y < self.y2:
-            self.prop['area_fullfill'] = True
+            self.prop['area_fulfil'] = True
             self.prop['area_color'] = QColor.fromRgb(252, 186, 3, 80)
             return True
         return False
@@ -137,21 +139,29 @@ class Object():
         self.selected = True
         self.x1 += dx
         self.y1 += dy
+        self.x1 = min(max(self.x1, 0), self.width-1)
+        self.y1 = min(max(self.y1, 0), self.height-1)
 
     def moved_rt(self, dx, dy):
         self.selected = True
         self.x2 += dx
         self.y1 += dy
+        self.x2 = min(max(self.x2, 0), self.width-1)
+        self.y1 = min(max(self.y1, 0), self.height-1)
 
     def moved_lb(self, dx, dy):
         self.selected = True
         self.x1 += dx
         self.y2 += dy
+        self.x1 = min(max(self.x1, 0), self.width-1)
+        self.y2 = min(max(self.y2, 0), self.height-1)
 
     def moved_rb(self, dx, dy):
         self.selected = True
         self.x2 += dx
         self.y2 += dy
+        self.x2 = min(max(self.x2, 0), self.width-1)
+        self.y2 = min(max(self.y2, 0), self.height-1)
 
     def moved_rect(self, dx, dy):
         self.selected = True
@@ -174,6 +184,56 @@ class Object():
         self.x2 = max(x1, x2)
         self.y2 = max(y1, y2)
 
+    def area(self):
+        return abs((self.x2-self.x1) * (self.y2-self.y1))
+
+    def length_intersection(self, other):
+        left = max(self.x1, other.x1)
+        right = min(self.x2, other.x2)
+        top = max(self.y1, other.y1)
+        bot = min(self.y2, other.y2)
+        return [right - left, bot - top]
+
+    def area_intersection(self, other):
+        w, h = self.length_intersection(other)
+        if w < 0 or h < 0:
+            return 0
+        area = w * h
+        return area
+
+    def area_union(self, other):
+        i = self.area_intersection(other)
+        u = self.area() + other.area() - i
+        return u
+
+    def iou(self, other):
+        self.arrange()
+        other.arrange()
+        i = self.area_intersection(other)
+        u = self.area_union(other)
+        return i / u
+
+    def union(self, other):
+        self.arrange()
+        other.arrange()
+
+        x1 = min(self.x1, other.x1)
+        x2 = max(self.x2, other.x2)
+        y1 = min(self.y1, other.y1)
+        y2 = max(self.y2, other.y2)
+
+        self.x1 = x1
+        self.x2 = x2
+        self.y1 = y1
+        self.y2 = y2
+
+    def scale(self, fx, fy):
+        self.x1 = self.x1 * fx
+        self.x2 = self.x2 * fy
+        self.y1 = self.y1 * fx
+        self.y2 = self.y2 * fy
+
+
 class ObjectManager():
     def __init__(self):
         self.width_display = 0
@@ -194,9 +254,9 @@ class ObjectManager():
 
         self.xmlpath = None
 
-    def initialize(self, xmlpath, width_org, height_org, width_display, height_display, converted):
+    def initialize(self, xmlpath, width_org, height_org, width_display, height_display, do_not_save_xml):
 
-        if self.xmlpath is not None and not converted:
+        if self.xmlpath is not None and not do_not_save_xml:
             util.save_xml(self.xmlpath, self.__objects, width_org, height_org)
 
         self.width_org = width_org
@@ -232,42 +292,132 @@ class ObjectManager():
                 obj = Object(label, x1, y1, x2, y2, width_org, height_org)
                 self.__objects.append(obj)
 
-    def getobjects(self):
+    def getobjects(self, for_background=False, do_scale=True):
         objects = []
 
         for object_ in self.__objects:
-
+            label = object_.label
             x1 = min(object_.x1, object_.x2)
             x2 = max(object_.x1, object_.x2)
             y1 = min(object_.y1, object_.y2)
             y2 = max(object_.y1, object_.y2)
 
-            obj = Object( object_.label, int(x1 * self.fx), int(y1 * self.fy), int(x2 * self.fx), int(y2 * self.fy))
+            if do_scale:
+                obj = Object(label, int(x1 * self.fx), int(y1 * self.fy), int(x2 * self.fx), int(y2 * self.fy))
+            else:
+                obj = Object(label, int(x1), int(y1), int(x2), int(y2))
             obj.selected = object_.selected
             obj.prop = object_.prop
             obj.set_label = object_.set_label
-            objects.append(obj)
 
-        if self.states['dragging_left'] or self.states['dragging_right']:
-            x1 = min(self.states['x'], self.states['start_x'])
-            x2 = max(self.states['x'], self.states['start_x'])
-            y1 = min(self.states['y'], self.states['start_y'])
-            y2 = max(self.states['y'], self.states['start_y'])
-            obj = Object( '@DRAG', int(x1 * self.fx), int(y1 * self.fy), int(x2 * self.fx), int(y2 * self.fy))
-            obj.prop['area_color'] = QColor.fromRgb(220, 232, 58, 122)
-            obj.prop['area_fullfill'] = True
-            objects.append(obj)
+            if not for_background:
+                objects.append(obj)
+            else:
+                if 'unrelated_with_yolobgs' in label:
+                    pass
+                elif 'nothing' in label:
+                    pass
+                else:
+                    objects.append(obj)
+
+        if not for_background:
+            if self.states['dragging_left'] or self.states['dragging_right']:
+                x1 = min(self.states['x'], self.states['start_x'])
+                x2 = max(self.states['x'], self.states['start_x'])
+                y1 = min(self.states['y'], self.states['start_y'])
+                y2 = max(self.states['y'], self.states['start_y'])
+                obj = Object( '@DRAG', int(x1 * self.fx), int(y1 * self.fy), int(x2 * self.fx), int(y2 * self.fy))
+
+                if do_scale:
+                    obj = Object( '@DRAG', int(x1 * self.fx), int(y1 * self.fy), int(x2 * self.fx), int(y2 * self.fy))
+                else:
+                    obj = Object( '@DRAG', int(x1), int(y1), int(x2), int(y2))
+
+                obj.prop['area_color'] = QColor.fromRgb(220, 232, 58, 122)
+                obj.prop['area_fulfil'] = True
+                objects.append(obj)
         return objects
+
+    def getdifference(self, other, width_display=0, height_display=0):
+        objects1 = self.getobjects(True, do_scale=False)
+        objects2 = other.getobjects(True, do_scale=False)
+
+        sameobjects = []
+        for object1 in objects1:
+            for object2 in objects2:
+                iou = object1.iou(object2)
+                if iou > 0.9:
+                    sameobjects.append(object1)
+                    sameobjects.append(object2)
+
+        for sameobject in sameobjects:
+            try: objects1.remove(sameobject)
+            except: pass
+            try: objects2.remove(sameobject)
+            except: pass
+
+        differences = []
+        for object1 in objects1:
+            differences.append(object1)
+        for object2 in objects2:
+            differences.append(object2)
+
+        while True:
+            if len(differences) == 0:
+                break
+            object1 = differences[0]
+            object2 = differences[0]
+
+            overlapped = False
+            for diff1 in differences:
+                for diff2 in differences:
+                    if diff1 is diff2:
+                        continue
+                    iou = diff1.iou(diff2)
+                    if iou > 0.1:
+                        object1 = diff1
+                        object2 = diff2
+                        overlapped = True
+                        break
+                if overlapped:
+                    break
+            if not overlapped:
+                break
+
+            integrated = deepcopy(object1)
+            integrated.union(object2)
+
+            try: differences.remove(object1)
+            except: pass
+            try: differences.remove(object2)
+            except: pass
+            differences.append(integrated)
+
+
+        if width_display != 0 and height_display!=0:
+            fx = width_display / self.width_org
+            fy = height_display / self.height_org
+
+            for diff in differences:
+                diff.scale(fx, fy)
+
+        return differences
 
     def mouse_event(self, about_mouse, x, y):
         changed = False
 
+        org_x = x
+        org_y = y
+
         x = max(x, 0)
         y = max(y, 0)
-        x = min(x, self.width_display - 1)
-        y = min(y, self.height_display - 1)
         x /= self.fx
         y /= self.fy
+        x = math.ceil(x)
+        y = math.ceil(y)
+        x = min(x, self.width_org - 1)
+        y = min(y, self.height_org - 1)
+
         dx = x - self.states['x']
         dy = y - self.states['y']
 
