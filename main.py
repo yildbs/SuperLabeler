@@ -249,6 +249,8 @@ class MainWindow(QMainWindow, main_form_class):
             self.property_paging['current_index_foreground'] = index.row()
             self.current_foreground_path = filename
             self.new_foreground()
+        self.set_count_foregrounds(self.property_paging['current_index_foreground'], len(self.foregrounds) )
+        self.set_count_backgrounds(self.property_paging['current_index_background'], len(self.backgrounds) )
 
     def on_background_selected(self, index):
         if self.property_folder['for_yolobgs']:
@@ -256,6 +258,8 @@ class MainWindow(QMainWindow, main_form_class):
             self.property_paging['current_index_background'] = index.row()
             self.current_background_path = filename
             self.new_background()
+        self.set_count_foregrounds(self.property_paging['current_index_foreground'], len(self.foregrounds) )
+        self.set_count_backgrounds(self.property_paging['current_index_background'], len(self.backgrounds) )
 
     def new_foreground(self):
         image = QImage(self.current_foreground_path)
@@ -267,19 +271,19 @@ class MainWindow(QMainWindow, main_form_class):
 
             self.graphicsView_foreground.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_foreground.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.graphicsView_foreground.wheelEvent = lambda p : []
+            self.graphicsView_foreground.wheelEvent = lambda e : None
 
             self.graphicsView_background.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_background.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.graphicsView_background.wheelEvent = lambda p : []
+            self.graphicsView_background.wheelEvent = lambda e : None
 
             self.graphicsView_diffground.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_diffground.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.graphicsView_diffground.wheelEvent = lambda p : []
+            self.graphicsView_diffground.wheelEvent = lambda e : None
 
             self.graphicsView_zoomground.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_zoomground.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.graphicsView_zoomground.wheelEvent = lambda p : []
+            self.graphicsView_zoomground.wheelEvent = lambda e : None
 
             size = image.size()
             width_org = size.width()
@@ -349,7 +353,7 @@ class MainWindow(QMainWindow, main_form_class):
                     item_rect.setBrush(obj.prop['area_color'])
 
                 # label
-                item_label = QGraphicsTextItem(obj.label)
+                item_label = QGraphicsTextItem(obj.get_label())
                 item_label.setPos(QtCore.QPoint(obj.x1, obj.y1))
                 item_label.setDefaultTextColor(obj.prop['text_color'])
 
@@ -370,8 +374,8 @@ class MainWindow(QMainWindow, main_form_class):
             ###### zoom
             try:
                 self.scene_zoomground.clear()
-                rect = QtCore.QRect(self.about_mouse['current_x'] - 101, self.about_mouse['current_y'] - 101, 201, 201)
-                item_zoomground = QGraphicsPixmapItem(QPixmap.fromImage(self.foreground_image.copy(rect)))
+                rect = QtCore.QRect(self.about_mouse['current_x'] - 51, self.about_mouse['current_y'] - 51, 101, 101)
+                item_zoomground = QGraphicsPixmapItem(QPixmap.fromImage(self.foreground_image.copy(rect).scaled(201, 201)))
 
                 item_vertical = QGraphicsLineItem(101, 0, 101, 201)
                 item_vertical.setPen(QColor("Red"))
@@ -381,12 +385,11 @@ class MainWindow(QMainWindow, main_form_class):
                 self.scene_zoomground.addItem(item_vertical)
                 self.scene_zoomground.addItem(item_horizontal)
             except Exception as e:
-                pass
+                print(e)
 
 
             if self.property_folder['for_yolobgs'] and len(self.backgrounds) > 0:
                 differences = self.objects_foreground.getdifference(self.objects_background, 480, 270)
-
                 try:
                     self.scene_diffground.clear()
 
@@ -431,19 +434,43 @@ class MainWindow(QMainWindow, main_form_class):
     def refresh_display_diff(self):
         pass
 
+    def set_text_cursor_pos(self, x, y):
+        self.label_cursor_pos.setText('Current(%d, %d)'%(x, y))
+
+    def set_text_cursor_size(self, x, y):
+        self.label_cursor_size.setText('Size(%d, %d)'%(x, y))
+
+    def set_text_cursor_start(self, x, y):
+        self.label_cursor_start.setText('From(%d, %d)'%(x, y))
+
     ####################################################
     # mouse & keyboard
     ####################################################
     def on_mouse_moved(self, p):
-        self.foreground_changed = self.objects_foreground.mouse_event(self.about_mouse, p.scenePos().x(), p.scenePos().y())
-        self.about_mouse['current_x'] = p.scenePos().x()
-        self.about_mouse['current_y'] = p.scenePos().y()
+        x = p.scenePos().x()
+        y = p.scenePos().y()
+
+        self.about_mouse['current_x'] = x
+        self.about_mouse['current_y'] = y
+        _, states = self.objects_foreground.mouse_event(self.about_mouse, x, y)
+
+        self.set_text_cursor_pos(states['x'], states['y'])
+        if states['dragging_left'] or states['dragging_right']:
+            self.set_text_cursor_start(states['start_x'], states['start_y'])
+            self.set_text_cursor_size(states['x']-states['start_x'], states['y']-states['start_y'])
+        else:
+            self.set_text_cursor_start(0, 0)
+            self.set_text_cursor_size(0, 0)
+
+        self.foreground_changed =  True
 
     def on_mouse_pressed(self, p):
+        x = p.scenePos().x()
+        y = p.scenePos().y()
+
         if p.button() == 1: self.about_mouse['pressed_left'] = True
         elif p.button() == 2: self.about_mouse['pressed_right'] = True
-        self.foreground_changed = self.objects_foreground.mouse_event(self.about_mouse, p.scenePos().x(), p.scenePos().y())
-
+        self.foreground_changed, states = self.objects_foreground.mouse_event(self.about_mouse, x, y)
         for combo in self.comboboxes:
             combo.close()
         self.comboboxes.clear()
@@ -451,16 +478,20 @@ class MainWindow(QMainWindow, main_form_class):
     def on_mouse_released(self, p):
         if p.button() == 1: self.about_mouse['pressed_left'] = False
         elif p.button() == 2: self.about_mouse['pressed_right'] = False
-        self.foreground_changed = self.objects_foreground.mouse_event(self.about_mouse, p.scenePos().x(), p.scenePos().y())
+
+        self.foreground_changed, states = self.objects_foreground.mouse_event(self.about_mouse, p.scenePos().x(), p.scenePos().y())
 
     def keyPressEvent(self, p):
         self.ctrl_pressed = p.modifiers() == Qt.ControlModifier
         self.about_mouse['pressed_ctrl'] = self.ctrl_pressed
 
-        try:
-            self.functions[p.text()]()
-        except Exception as e:
-            print(e)
+        key = p.key()
+        if Qt.Key_0 <= key <= Qt.Key_9 or Qt.Key_A <= key <= Qt.Key_Z or key == Qt.Key_Space:
+            try:
+                full_key = ['ctrl' if self.ctrl_pressed else ''][0] + QKeySequence(key).toString().lower()
+                self.functions[full_key]()
+            except Exception as e:
+                pass
 
     def focusNextPrevChild(self, bool): # tab key
         self.go_to_next_backgground()
@@ -493,6 +524,13 @@ class MainWindow(QMainWindow, main_form_class):
 
         self.functions['z'] = self.go_to_previous_folder
         self.functions['x'] = self.go_to_next_folder
+
+        self.functions['space'] = self.popup_edit_label
+
+        self.functions['h'] = self.hot_function
+
+        self.functions['ctrlz'] = self.undo
+        self.functions['ctrla'] = self.select_all
 
         for index, string in enumerate(self.property_folder_strings):
             self.functions[str(index+1)] = (lambda s: (lambda: self.toggle_property(s)))(string)
@@ -580,7 +618,6 @@ class MainWindow(QMainWindow, main_form_class):
         self.foreground_changed = True
 
     def toggle_property(self, key):
-        print(key)
         if self.property_folder[key]:
             try:
                 shutil.rmtree(self.cur_dir + '/' + key)
@@ -591,9 +628,43 @@ class MainWindow(QMainWindow, main_form_class):
                 os.makedirs(self.cur_dir + '/' + key)
             except Exception as e:
                 print(e)
-        time.sleep(0.1)
         self.refresh_property_folder()
         self.refresh_page()
+
+    def popup_edit_label(self):
+        objects = self.objects_foreground.getobjects()
+        for obj in objects:
+            if obj.selected:
+                combo = QComboBox(self.graphicsView_foreground)
+                combo.setGeometry(obj.x1, obj.y1, 130, 40)
+                with open("labels.txt", "r") as f:
+                    combo.addItem(obj.get_label())
+                    for line in f.readlines():
+                        line.replace('\n','', len(line))
+                        line.replace('\r','', len(line))
+                        line.replace('\t','', len(line))
+                        combo.addItem(line)
+                combo.currentIndexChanged.connect((lambda obj_: lambda: obj_.set_label(combo.currentText()))(obj))
+                combo.show()
+                self.comboboxes.append(combo)
+
+    def hot_function(self):
+        objects = self.objects_foreground.getobjects()
+        for obj in objects:
+            if obj.selected:
+                self.foreground_changed = True
+                if obj.get_label() == 'people':
+                    obj.set_label('kids')
+                else:
+                    obj.set_label('kid')
+
+    def undo(self):
+        self.objects_foreground.undo()
+        self.foreground_changed = True
+
+    def select_all(self):
+        self.objects_foreground.select_all()
+        self.foreground_changed = True
 
 
 if __name__ == "__main__":

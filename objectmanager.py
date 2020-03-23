@@ -3,13 +3,14 @@ from copy import deepcopy
 import util
 from PyQt5.QtGui import QColor
 import math
+import sys
 
 
 class Object():
 
     def __init__(self, label, x1, y1, x2, y2, width =0, height=0):
         self.selected = False
-        self.label = label
+        self.__label = label.replace('\n', '', len(label)).replace('\r', '', len(label))
         self.x1 = x1
         self.y1 = y1
         self.x2 = x2
@@ -30,22 +31,22 @@ class Object():
         if self.y1 != other.y1: isequal = False
         if self.x2 != other.x2: isequal = False
         if self.y2 != other.y2: isequal = False
-        if self.label != other.label: isequal = False
+        if self.__label != other.__label: isequal = False
         return isequal
 
     def set_label(self, label):
-        self.label = label
+        self.__label = label.replace('\n', '', len(label)).replace('\r', '', len(label))
 
     def get_label(self):
-        return self.label
+        return self.__label
 
     def set_as_ng(self):
-        if '_NG' in self.label:
-            self.label = self.label.replace('_NG', '')
+        if '_NG' in self.__label:
+            self.__label = self.__label.replace('_NG', '')
 
     def set_as_g(self):
-        if '_NG' not in self.label:
-            self.label = self.label + '_NG'
+        if '_NG' not in self.__label:
+            self.__label = self.__label + '_NG'
 
     def reset_property(self):
         self.prop['text_color'] = QColor("yellow")
@@ -62,15 +63,15 @@ class Object():
         self.prop['vertex_r_lb'] = self.circle_small
         self.prop['vertex_r_rb'] = self.circle_small
 
-        if self.label == 'nothing':
+        if self.__label == 'nothing':
             self.prop['text_color'] = QColor.fromRgb(173, 148, 108)
             self.prop['area_color'] = QColor.fromRgb(173, 148, 108, 80)
             self.prop['line_color'] = QColor.fromRgb(173, 148, 108)
             self.prop['area_fulfil'] = True
-        elif '_NG' in self.label:
+        elif '_NG' in self.__label:
             self.prop['text_color'] = QColor("red")
             self.prop['line_color'] = QColor("red")
-        # elif 'person' in self.label:
+        # elif 'person' in self.__label:
         #     self.prop['text_color'] = QColor("red")
         #     self.prop['line_color'] = QColor("red")
 
@@ -256,6 +257,7 @@ class ObjectManager():
         self.width_display = 0
         self.height_display = 0
         self.__objects = []
+        self.__objects_previous = []
         self.__objects_copied = []
 
         self.states = {}
@@ -313,7 +315,7 @@ class ObjectManager():
         objects = []
 
         for object_ in self.__objects:
-            label = object_.label
+            label = object_.get_label()
             x1 = min(object_.x1, object_.x2)
             x2 = max(object_.x1, object_.x2)
             y1 = min(object_.y1, object_.y2)
@@ -474,31 +476,39 @@ class ObjectManager():
                 for obj in self.__objects:
                     obj.selected = False
 
-                make_new = False
-                x1 = 9999
-                y1 = 9999
-                x2 = 0
-                y2 = 0
-                for obj in self.__objects:
-                    start = [min(self.states['start_x'], x), min(self.states['start_y'], y)]
-                    end = [max(self.states['start_x'], x), max(self.states['start_y'], y)]
-                    if obj.drag(start, end):
-                        x1 = min(x1, obj.x1)
-                        y1 = min(y1, obj.y1)
-                        x2 = max(x2, obj.x2)
-                        y2 = max(y2, obj.y2)
-                        make_new = True
-
-                if make_new:
-                    exist = False
-                    new_obj = Object('people', x1, y1, x2, y2, self.width_org, self.height_org)
-                    new_obj.selected = True
+                if abs((self.states['start_x']-x) * (self.states['start_y']-y)) > 10:
+                    make_new = False
+                    x1 = sys.maxsize
+                    y1 = sys.maxsize
+                    x2 = 0
+                    y2 = 0
                     for obj in self.__objects:
-                        if new_obj == obj:
-                            exist = True
+                        start = [min(self.states['start_x'], x), min(self.states['start_y'], y)]
+                        end = [max(self.states['start_x'], x), max(self.states['start_y'], y)]
+                        if obj.drag(start, end):
+                            x1 = min(x1, obj.x1)
+                            y1 = min(y1, obj.y1)
+                            x2 = max(x2, obj.x2)
+                            y2 = max(y2, obj.y2)
+                            make_new = True
+
+                    if make_new:
+                        self.keep_current()
+                        exist = False
+                        new_obj = Object('people', x1, y1, x2, y2, self.width_org, self.height_org)
+                        new_obj.selected = True
+                        for obj in self.__objects:
+                            if new_obj == obj:
+                                exist = True
+                                break
+                        if not exist:
+                            self.__objects.append(new_obj)
+
+                else:
+                    for obj in self.__objects:
+                        if obj.click_area(x, y) is not None:
                             break
-                    if not exist:
-                        self.__objects.append(new_obj)
+                    self.delete_selected()
 
             changed = True
 
@@ -542,6 +552,7 @@ class ObjectManager():
                         self.states['start_x'] = x
                         self.states['start_y'] = y
                     else:
+                        self.keep_current()
                         self.function_moved(dx, dy)
 
             elif about_mouse['pressed_right']:
@@ -567,15 +578,17 @@ class ObjectManager():
         self.states['x'] = x
         self.states['y'] = y
 
-        return changed
+        return changed, self.states
 
     def delete_selected(self):
+        self.keep_current()
         self.__objects = [obj for obj in self.__objects if not obj.selected]
 
     def copy_selected(self):
         self.__objects_copied = deepcopy([obj for obj in self.__objects if obj.selected])
 
     def paste_objects(self):
+        self.keep_current()
         for copied in self.__objects_copied:
             exist = False
             for obj in self.__objects:
@@ -587,18 +600,32 @@ class ObjectManager():
                 self.__objects.append(deepcopy(copied))
 
     def make_new_object(self):
+        self.keep_current()
+
         obj = Object('@NEW', self.states['x'] - 50, self.states['y'] - 50, self.states['x'] + 50, self.states['y'] + 50, self.width_org, self.height_org)
         self.__objects.append(obj)
 
+
     def set_as_g(self):
+        self.keep_current()
         for obj in self.__objects:
             if obj.selected:
                 obj.set_as_g()
                 obj.reset_property()
 
     def set_as_ng(self):
+        self.keep_current()
         for obj in self.__objects:
             if obj.selected:
                 obj.set_as_ng()
                 obj.reset_property()
 
+    def keep_current(self):
+        self.__objects_previous = deepcopy(self.__objects)
+
+    def undo(self):
+        self.__objects = deepcopy(self.__objects_previous)
+
+    def select_all(self):
+        for obj in self.__objects:
+            obj.selected = True

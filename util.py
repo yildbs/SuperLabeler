@@ -97,7 +97,7 @@ def read_xml(xmlpath):
 def save_xml(foregroundimagexmlpath, objects, image_width, image_height ):
     xml_annotation = make_xml_annotation(image_width, image_height)
     for index, object in enumerate(objects):
-        label = object.label
+        label = object.get_label()
         if label == '@DRAG':
             continue
         x1 = int(object.x1)
