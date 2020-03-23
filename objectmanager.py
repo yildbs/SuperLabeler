@@ -74,7 +74,7 @@ class Object():
         #     self.prop['text_color'] = QColor("red")
         #     self.prop['line_color'] = QColor("red")
 
-    def click(self, x, y):
+    def click_vertex(self, x, y):
         p = [x, y]
         lt = [self.x1, self.y1]
         rt = [self.x2, self.y1]
@@ -93,13 +93,21 @@ class Object():
         elif util.get_distance(rb, p) < self.circle_small:
             self.selected = True
             return self.moved_rb
-        elif self.x1 < x < self.x2 and self.y1 < y < self.y2:
-            # self.selected = True
+        return None
+
+    def click_area(self, x, y):
+        p = [x, y]
+        lt = [self.x1, self.y1]
+        rt = [self.x2, self.y1]
+        lb = [self.x1, self.y2]
+        rb = [self.x2, self.y2]
+
+        if self.x1 < x < self.x2 and self.y1 < y < self.y2:
             self.selected = not self.selected
             return self.moved_rect
         return None
 
-    def react_mouse(self, x, y):
+    def react_mouse_vertex(self, x, y):
         p = [x, y]
         lt = [self.x1, self.y1]
         rt = [self.x2, self.y1]
@@ -118,7 +126,16 @@ class Object():
         elif util.get_distance(rb, p) < self.circle_small:
             self.prop['vertex_r_rb'] = self.circle_big
             return True
-        elif self.x1 < x < self.x2 and self.y1 < y < self.y2:
+        return False
+
+    def react_mouse_area(self, x, y):
+        p = [x, y]
+        lt = [self.x1, self.y1]
+        rt = [self.x2, self.y1]
+        lb = [self.x1, self.y2]
+        rb = [self.x2, self.y2]
+
+        if self.x1 < x < self.x2 and self.y1 < y < self.y2:
             self.prop['area_fulfil'] = True
             self.prop['area_color'] = QColor.fromRgb(252, 186, 3, 80)
             return True
@@ -229,8 +246,8 @@ class Object():
 
     def scale(self, fx, fy):
         self.x1 = self.x1 * fx
-        self.x2 = self.x2 * fy
-        self.y1 = self.y1 * fx
+        self.x2 = self.x2 * fx
+        self.y1 = self.y1 * fy
         self.y2 = self.y2 * fy
 
 
@@ -493,7 +510,7 @@ class ObjectManager():
 
                 elif about_mouse['pressed_ctrl']:
                     for obj in self.__objects:
-                        ret = obj.click(x, y)
+                        ret = obj.click_vertex(x, y) or obj.click_area(x, y)
                         if ret is None:
                             continue
                         else:
@@ -504,12 +521,21 @@ class ObjectManager():
 
                     self.function_moved = None
                     for obj in self.__objects:
-                        self.function_moved = obj.click(x, y)
+                        self.function_moved = obj.click_vertex(x, y)
                         if self.function_moved is None:
                             continue
                         else:
                             self.states['move_vertex'] = True
                             break
+
+                    if not self.states['move_vertex'] :
+                        for obj in self.__objects:
+                            self.function_moved = obj.click_area(x, y)
+                            if self.function_moved is None:
+                                continue
+                            else:
+                                self.states['move_vertex'] = True
+                                break
 
                     if self.function_moved is None:
                         self.states['dragging_left'] = True
@@ -527,9 +553,16 @@ class ObjectManager():
                 for obj in self.__objects:
                     obj.reset_property()
 
+                react = False
                 for obj in self.__objects:
-                    if obj.react_mouse(x, y):
+                    if obj.react_mouse_vertex(x, y):
+                        react = True
                         break
+
+                if not react:
+                    for obj in self.__objects:
+                        if obj.react_mouse_area(x, y):
+                            break
 
         self.states['x'] = x
         self.states['y'] = y

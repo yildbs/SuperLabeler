@@ -11,6 +11,8 @@ dog
 falldown_human
 falldown_human_NG
 IV_pole
+kid
+kids
 kisa_elevator_door_opened
 nothing
 people

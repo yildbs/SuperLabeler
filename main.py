@@ -19,10 +19,10 @@ class MainWindow(QMainWindow, main_form_class):
         self.setWindowTitle("Super Labeler")
 
         #Initialize GUI
-        self.lineEdit_BaseDirectory.setText('/home/yildbs/Train/Anyang_Temp')
+        self.lineEdit_BaseDirectory.setText('/home/yildbs/Train/')
 
         #Initialize variables
-        self.tree = self.treeView_DirectoryTree
+        self.tree = self.treeView_directory_tree
         self.model = QFileSystemModel()
 
         self.foregrounds = []
@@ -50,11 +50,17 @@ class MainWindow(QMainWindow, main_form_class):
         self.graphicsView_diffground.setScene(self.scene_diffground)
         self.diffground_changed = False
 
+        self.scene_zoomground = QGraphicsScene()
+        self.graphicsView_zoomground.setScene(self.scene_zoomground)
+        self.zoomground_changed = False
+
         self.about_mouse = {}
         self.about_mouse['pressed_left'] = False
         self.about_mouse['pressed_right'] = False
         self.about_mouse['pressed_ctrl'] = False
         self.about_mouse['new_rect'] = False
+        self.about_mouse['current_x'] = 0
+        self.about_mouse['current_y'] = 0
 
         self.property_paging = {}
         self.property_paging['current_index_foreground'] = 0
@@ -64,8 +70,7 @@ class MainWindow(QMainWindow, main_form_class):
         self.property_folder_strings = []
         self.property_folder_strings.append('for_yolo')
         self.property_folder_strings.append('for_yolobgs')
-        self.property_folder_strings.append('for_classifier')
-        self.property_folder_strings.append('there_is_not_car')
+        self.property_folder_strings.append('there_is_no_car')
         self.property_folder_strings.append('is_gray')
         self.property_folder_strings.append('is_people_NG')
         self.property_folder_strings.append('is_soldier')
@@ -85,14 +90,14 @@ class MainWindow(QMainWindow, main_form_class):
 
         #Signal & Slots
         self.pushButton_Refresh.clicked.connect(self.refresh)
-        self.treeView_DirectoryTree.clicked.connect(self.on_treeView_clicked)
+        self.treeView_directory_tree.clicked.connect(self.on_treeView_clicked)
 
         self.listWidget_backgrounds.clicked.connect(self.on_background_selected)
         self.listWidget_foregrounds.clicked.connect(self.on_foreground_selected)
 
         # Callback
-        self.treeView_DirectoryTree.keyPressEvent = self.keyPressEvent
-        self.treeView_DirectoryTree.keyReleaseEvent = self.keyReleaseEvent
+        self.treeView_directory_tree.keyPressEvent = self.keyPressEvent
+        self.treeView_directory_tree.keyReleaseEvent = self.keyReleaseEvent
         self.listWidget_backgrounds.keyPressEvent = self.keyPressEvent
         self.listWidget_backgrounds.keyReleaseEvent = self.keyReleaseEvent
         self.listWidget_foregrounds.keyPressEvent = self.keyPressEvent
@@ -103,6 +108,18 @@ class MainWindow(QMainWindow, main_form_class):
         self.timer.setInterval(30)
         self.timer.timeout.connect(self.thread_refresh_display)
         self.timer.start()
+
+    def set_count_foregrounds(self, index, total):
+        if total > 0:
+            self.label_count_foregrounds.setText('(%d / %d)' %(index+1, total))
+        else:
+            self.label_count_foregrounds.setText('')
+
+    def set_count_backgrounds(self, index, total):
+        if total > 0:
+            self.label_count_backgrounds.setText('(%d / %d)' %(index+1, total))
+        else:
+            self.label_count_backgrounds.setText('')
 
     def refresh(self):
         basedir = self.lineEdit_BaseDirectory.text()
@@ -189,6 +206,9 @@ class MainWindow(QMainWindow, main_form_class):
             table.setItem(index, 1, QTableWidgetItem("True" if self.property_folder[str] else "False"))
 
     def refresh_page(self):
+        self.set_count_foregrounds(self.property_paging['current_index_foreground'], len(self.foregrounds) )
+        self.set_count_backgrounds(self.property_paging['current_index_background'], len(self.backgrounds) )
+
         if len(self.foregrounds) > 0:
             if self.property_paging['current_index_foreground'] < 0:
                 self.property_paging['current_index_foreground'] = 0
@@ -256,6 +276,10 @@ class MainWindow(QMainWindow, main_form_class):
             self.graphicsView_diffground.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_diffground.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_diffground.wheelEvent = lambda p : []
+
+            self.graphicsView_zoomground.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.graphicsView_zoomground.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.graphicsView_zoomground.wheelEvent = lambda p : []
 
             size = image.size()
             width_org = size.width()
@@ -343,6 +367,23 @@ class MainWindow(QMainWindow, main_form_class):
                 self.scene_foreground.addItem(item_lb)
                 self.scene_foreground.addItem(item_rb)
 
+            ###### zoom
+            try:
+                self.scene_zoomground.clear()
+                rect = QtCore.QRect(self.about_mouse['current_x'] - 101, self.about_mouse['current_y'] - 101, 201, 201)
+                item_zoomground = QGraphicsPixmapItem(QPixmap.fromImage(self.foreground_image.copy(rect)))
+
+                item_vertical = QGraphicsLineItem(101, 0, 101, 201)
+                item_vertical.setPen(QColor("Red"))
+                item_horizontal = QGraphicsLineItem(0, 101, 201, 101)
+                item_horizontal.setPen(QColor("Red"))
+                self.scene_zoomground.addItem(item_zoomground)
+                self.scene_zoomground.addItem(item_vertical)
+                self.scene_zoomground.addItem(item_horizontal)
+            except Exception as e:
+                pass
+
+
             if self.property_folder['for_yolobgs'] and len(self.backgrounds) > 0:
                 differences = self.objects_foreground.getdifference(self.objects_background, 480, 270)
 
@@ -352,6 +393,8 @@ class MainWindow(QMainWindow, main_form_class):
                     self.diffground_image = self.background_image.copy()
                     painter = QPainter(self.diffground_image)
                     painter.drawImage(0, 0, self.foreground_image.scaled(480, 270))
+                    # painter.drawImage(0, 0, self.background_image.scaled(480, 270))
+                    painter.end()
 
                     item_diffground = QGraphicsPixmapItem(QPixmap.fromImage(self.diffground_image))
                     self.scene_diffground.addItem(item_diffground)
@@ -393,6 +436,8 @@ class MainWindow(QMainWindow, main_form_class):
     ####################################################
     def on_mouse_moved(self, p):
         self.foreground_changed = self.objects_foreground.mouse_event(self.about_mouse, p.scenePos().x(), p.scenePos().y())
+        self.about_mouse['current_x'] = p.scenePos().x()
+        self.about_mouse['current_y'] = p.scenePos().y()
 
     def on_mouse_pressed(self, p):
         if p.button() == 1: self.about_mouse['pressed_left'] = True
@@ -470,6 +515,8 @@ class MainWindow(QMainWindow, main_form_class):
     def go_to_next_backgground(self):
         try:
             self.property_paging['current_index_background'] += 1
+            self.foreground_changed = True
+            self.background_changed = True
             self.refresh_page()
         except:
             pass
@@ -501,7 +548,7 @@ class MainWindow(QMainWindow, main_form_class):
             os.rename(src_xml, dst_xml)
 
             self.fg_bg_converted =True
-            self.treeView_DirectoryTree.clicked.emit(self.treeView_DirectoryTree.currentIndex())
+            self.treeView_directory_tree.clicked.emit(self.treeView_directory_tree.currentIndex())
 
     def go_to_previous_folder(self):
         self.property_paging['current_index_directories'] -= 1
@@ -522,7 +569,7 @@ class MainWindow(QMainWindow, main_form_class):
             os.rename(src_xml, dst_xml)
 
             self.fg_bg_converted =True
-            self.treeView_DirectoryTree.clicked.emit(self.treeView_DirectoryTree.currentIndex())
+            self.treeView_directory_tree.clicked.emit(self.treeView_directory_tree.currentIndex())
 
     def set_as_ng(self):
         self.objects_foreground.set_as_ng()
@@ -544,6 +591,7 @@ class MainWindow(QMainWindow, main_form_class):
                 os.makedirs(self.cur_dir + '/' + key)
             except Exception as e:
                 print(e)
+        time.sleep(0.1)
         self.refresh_property_folder()
         self.refresh_page()
 
