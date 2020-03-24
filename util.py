@@ -94,7 +94,7 @@ def read_xml(xmlpath):
     return objects, fileread, changed
 
 
-def save_xml(foregroundimagexmlpath, objects, image_width, image_height ):
+def save_xml(xml_path, objects, image_width, image_height ):
     xml_annotation = make_xml_annotation(image_width, image_height)
     for index, object in enumerate(objects):
         label = object.get_label()
@@ -108,7 +108,7 @@ def save_xml(foregroundimagexmlpath, objects, image_width, image_height ):
         add_object_element(xml_annotation, label, str(x1), str(y1), str(x2), str(y2))
     indent(xml_annotation)
     xml_tree = ET.ElementTree(xml_annotation)
-    xml_tree.write(foregroundimagexmlpath)
+    xml_tree.write(xml_path)
 
 
 def get_distance(p1, p2):

@@ -37,6 +37,7 @@ class MainWindow(QMainWindow, main_form_class):
         self.objects_background = objectmanager.ObjectManager()
 
         self.ctrl_pressed = False
+        self.shift_pressed = False
 
         self.scene_foreground = QGraphicsScene()
         self.graphicsView_foreground.setScene(self.scene_foreground)
@@ -61,6 +62,9 @@ class MainWindow(QMainWindow, main_form_class):
         self.about_mouse['new_rect'] = False
         self.about_mouse['current_x'] = 0
         self.about_mouse['current_y'] = 0
+
+        self.about_mouse['pressed_ctrl'] = False
+        self.about_mouse['pressed_shift'] = False
 
         self.property_paging = {}
         self.property_paging['current_index_foreground'] = 0
@@ -92,18 +96,23 @@ class MainWindow(QMainWindow, main_form_class):
 
         #Signal & Slots
         self.pushButton_Refresh.clicked.connect(self.refresh)
-        self.treeView_directory_tree.clicked.connect(self.on_treeView_clicked)
+        self.treeView_directory_tree.clicked.connect(self.on_directory_tree_clicked)
 
         self.listWidget_backgrounds.clicked.connect(self.on_background_selected)
         self.listWidget_foregrounds.clicked.connect(self.on_foreground_selected)
 
         # Callback
-        self.treeView_directory_tree.keyPressEvent = self.keyPressEvent
-        self.treeView_directory_tree.keyReleaseEvent = self.keyReleaseEvent
-        self.listWidget_backgrounds.keyPressEvent = self.keyPressEvent
-        self.listWidget_backgrounds.keyReleaseEvent = self.keyReleaseEvent
-        self.listWidget_foregrounds.keyPressEvent = self.keyPressEvent
-        self.listWidget_foregrounds.keyReleaseEvent = self.keyReleaseEvent
+        self.keyPressEvent = self.key_press_event
+        self.keyReleaseEvent = self.key_release_event
+        self.wheelEvent = self.wheel_event
+        self.focusNextPrevChild = self.focus_next_prev_child
+
+        self.treeView_directory_tree.keyPressEvent = self.key_press_event
+        self.treeView_directory_tree.keyReleaseEvent = self.key_release_event
+        self.listWidget_backgrounds.keyPressEvent = self.key_press_event
+        self.listWidget_backgrounds.keyReleaseEvent = self.key_release_event
+        self.listWidget_foregrounds.keyPressEvent = self.key_press_event
+        self.listWidget_foregrounds.keyReleaseEvent = self.key_release_event
 
         # multithreading
         self.timer = QTimer()
@@ -141,7 +150,7 @@ class MainWindow(QMainWindow, main_form_class):
         self.tree.header().hideSection(2)
         self.tree.header().hideSection(3)
 
-    def on_treeView_clicked(self, index):
+    def on_directory_tree_clicked(self, index):
         index_item = self.model.index(index.row(), 0, index.parent())
 
         filename = self.model.fileName(index_item)
@@ -212,6 +221,7 @@ class MainWindow(QMainWindow, main_form_class):
         self.set_count_backgrounds(self.property_paging['current_index_background'], len(self.backgrounds) )
 
         self.zoom = 2.0
+        self.set_text_zoom()
 
         if len(self.foregrounds) > 0:
             if self.property_paging['current_index_foreground'] < 0:
@@ -275,19 +285,19 @@ class MainWindow(QMainWindow, main_form_class):
 
             self.graphicsView_foreground.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_foreground.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.graphicsView_foreground.wheelEvent = self.wheelEvent
+            self.graphicsView_foreground.wheelEvent = self.wheel_event
 
             self.graphicsView_background.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_background.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.graphicsView_background.wheelEvent = self.wheelEvent
+            self.graphicsView_background.wheelEvent = self.wheel_event
 
             self.graphicsView_diffground.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_diffground.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.graphicsView_diffground.wheelEvent = self.wheelEvent
+            self.graphicsView_diffground.wheelEvent = self.wheel_event
 
             self.graphicsView_zoomground.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_zoomground.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.graphicsView_zoomground.wheelEvent = self.wheelEvent
+            self.graphicsView_zoomground.wheelEvent = self.wheel_event
 
             size = image.size()
             width_org = size.width()
@@ -322,7 +332,9 @@ class MainWindow(QMainWindow, main_form_class):
             self.set_label = set_label
             self.get_label = get_label
 
-        def mouseDoubleClickEvent(self, e):
+            self.mouseDoubleClickEvent = self.mouse_double_click_event
+
+        def mouse_double_click_event(self, e):
             self.combo = QComboBox(self.parent.graphicsView_foreground)
             self.combo.setGeometry(e.scenePos().x(), e.scenePos().y(), 130, 40)
             with open("labels.txt", "r") as f:
@@ -339,14 +351,12 @@ class MainWindow(QMainWindow, main_form_class):
     def thread_refresh_display(self):
         if self.foreground_changed:
             self.foreground_changed = False
-
             try:
-
                 self.scene_foreground.clear()
                 item_foreground = QGraphicsPixmapItem(QPixmap.fromImage(self.foreground_image))
                 self.scene_foreground.addItem(item_foreground)
 
-                objects = self.objects_foreground.getobjects()
+                objects = self.objects_foreground.get_objects()
                 for obj in objects:
                     item_rect = self.DoubleClickableItem(QtCore.QRectF(obj.x1, obj.y1, obj.x2-obj.x1, obj.y2-obj.y1),
                                                          parent=self,
@@ -403,9 +413,8 @@ class MainWindow(QMainWindow, main_form_class):
             except Exception as e:
                 print(e)
 
-
             if self.property_folder['for_yolobgs'] and len(self.backgrounds) > 0:
-                differences = self.objects_foreground.getdifference(self.objects_background, 480, 270)
+                differences = self.objects_foreground.get_difference(self.objects_background, 480, 270)
                 try:
                     self.scene_diffground.clear()
 
@@ -437,7 +446,7 @@ class MainWindow(QMainWindow, main_form_class):
                 item_background = QGraphicsPixmapItem(QPixmap.fromImage(self.background_image))
                 self.scene_background.addItem(item_background)
 
-                objects = self.objects_background.getobjects(for_background=True)
+                objects = self.objects_background.get_objects(for_background=True)
                 for obj in objects:
                     # rect
                     item_rect = QGraphicsRectItem(QtCore.QRectF(obj.x1, obj.y1, obj.x2-obj.x1, obj.y2-obj.y1))
@@ -451,13 +460,16 @@ class MainWindow(QMainWindow, main_form_class):
         pass
 
     def set_text_cursor_pos(self, x, y):
-        self.label_cursor_pos.setText('Current(%d, %d)'%(x, y))
+        self.label_cursor_pos.setText('(%d, %d)'%(x, y))
 
     def set_text_cursor_size(self, x, y):
-        self.label_cursor_size.setText('Size(%d, %d)'%(x, y))
+        self.label_cursor_size.setText('(%d, %d)'%(x, y))
 
     def set_text_cursor_start(self, x, y):
-        self.label_cursor_start.setText('From(%d, %d)'%(x, y))
+        self.label_cursor_start.setText('(%d, %d)'%(x, y))
+
+    def set_text_zoom(self):
+        self.label_zoom.setText('(%.2f)'%(self.zoom))
 
     ####################################################
     # mouse & keyboard
@@ -465,12 +477,12 @@ class MainWindow(QMainWindow, main_form_class):
     def on_mouse_moved(self, p):
         x = p.scenePos().x()
         y = p.scenePos().y()
+        self.about_mouse['current_x'], self.about_mouse['current_y'] = x, y
 
-        self.about_mouse['current_x'] = x
-        self.about_mouse['current_y'] = y
-        _, states = self.objects_foreground.mouse_event(self.about_mouse, x, y)
+        _, states = self.objects_foreground.key_input_event(self.about_mouse, x, y)
 
         self.set_text_cursor_pos(states['x'], states['y'])
+
         if states['dragging_left'] or states['dragging_right']:
             self.set_text_cursor_start(states['start_x'], states['start_y'])
             self.set_text_cursor_size(states['x']-states['start_x'], states['y']-states['start_y'])
@@ -483,28 +495,46 @@ class MainWindow(QMainWindow, main_form_class):
     def on_mouse_pressed(self, p):
         x = p.scenePos().x()
         y = p.scenePos().y()
+        self.about_mouse['current_x'], self.about_mouse['current_y'] = x, y
 
         if p.button() == 1: self.about_mouse['pressed_left'] = True
         elif p.button() == 2: self.about_mouse['pressed_right'] = True
-        self.foreground_changed, states = self.objects_foreground.mouse_event(self.about_mouse, x, y)
+
+        self.foreground_changed, states = self.objects_foreground.key_input_event(self.about_mouse, x, y)
+
         for combo in self.comboboxes:
             combo.close()
+
         self.comboboxes.clear()
 
     def on_mouse_released(self, p):
+        x = p.scenePos().x()
+        y = p.scenePos().y()
+        self.about_mouse['current_x'], self.about_mouse['current_y'] = x, y
+
         if p.button() == 1: self.about_mouse['pressed_left'] = False
         elif p.button() == 2: self.about_mouse['pressed_right'] = False
 
-        self.foreground_changed, states = self.objects_foreground.mouse_event(self.about_mouse, p.scenePos().x(), p.scenePos().y())
+        self.foreground_changed, states = self.objects_foreground.key_input_event(self.about_mouse, x, y)
 
-    def keyPressEvent(self, p):
+    def key_press_event(self, p):
         self.ctrl_pressed = p.modifiers() == Qt.ControlModifier
         self.about_mouse['pressed_ctrl'] = self.ctrl_pressed
+
+        self.shift_pressed = p.modifiers() == Qt.ShiftModifier
+        self.about_mouse['pressed_shift'] = self.shift_pressed
+
+        self.foreground_changed, states = self.objects_foreground.key_input_event(self.about_mouse, self.about_mouse['current_x'], self.about_mouse['current_y'])
 
         key = p.key()
         if Qt.Key_0 <= key <= Qt.Key_9 or Qt.Key_A <= key <= Qt.Key_Z or key == Qt.Key_Space:
             try:
-                full_key = ['ctrl' if self.ctrl_pressed else ''][0] + QKeySequence(key).toString().lower()
+                prefix = ''
+                if self.ctrl_pressed:
+                    prefix = 'ctrl'
+                elif self.shift_pressed:
+                    prefix = 'shift'
+                full_key = prefix + QKeySequence(key).toString().lower()
                 self.functions[full_key]()
             except Exception as e:
                 pass
@@ -512,13 +542,21 @@ class MainWindow(QMainWindow, main_form_class):
         elif key == Qt.Key_Return:
             self.refresh()
 
-    def focusNextPrevChild(self, bool): # tab key
+        self.foreground_changed = True
+
+
+    def focus_next_prev_child(self, bool): # tab key
         self.go_to_next_backgground()
         return False
 
-    def keyReleaseEvent(self, p):
+    def key_release_event(self, p):
         self.ctrl_pressed = p.modifiers() == Qt.ControlModifier
         self.about_mouse['pressed_ctrl'] = self.ctrl_pressed
+
+        self.shift_pressed = p.modifiers() == Qt.ShiftModifier
+        self.about_mouse['pressed_shift'] = self.shift_pressed
+
+        self.foreground_changed = True
 
     #####################################################################################
     # shortcut functions
@@ -653,7 +691,7 @@ class MainWindow(QMainWindow, main_form_class):
         self.refresh_page()
 
     def popup_edit_label(self):
-        objects = self.objects_foreground.getobjects()
+        objects = self.objects_foreground.get_objects()
         for obj in objects:
             if obj.selected:
                 combo = QComboBox(self.graphicsView_foreground)
@@ -670,7 +708,7 @@ class MainWindow(QMainWindow, main_form_class):
                 self.comboboxes.append(combo)
 
     def hot_function(self):
-        objects = self.objects_foreground.getobjects()
+        objects = self.objects_foreground.get_objects()
         for obj in objects:
             if obj.selected:
                 self.foreground_changed = True
@@ -693,10 +731,11 @@ class MainWindow(QMainWindow, main_form_class):
         else:
             self.zoom /= 1.3
         self.zoom = min(max(self.zoom, 1.), 6.)
+        self.set_text_zoom()
         self.foreground_changed = True
 
-    def wheelEvent(self, QWheelEvent):
-        if QWheelEvent.angleDelta().y() > 0:
+    def wheel_event(self, e):
+        if e.angleDelta().y() > 0:
             self.set_zoom(True)
         else:
             self.set_zoom(False)

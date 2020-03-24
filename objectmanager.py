@@ -71,9 +71,6 @@ class Object():
         elif '_NG' in self.__label:
             self.prop['text_color'] = QColor("red")
             self.prop['line_color'] = QColor("red")
-        # elif 'person' in self.__label:
-        #     self.prop['text_color'] = QColor("red")
-        #     self.prop['line_color'] = QColor("red")
 
     def click_vertex(self, x, y):
         p = [x, y]
@@ -275,12 +272,12 @@ class ObjectManager():
         self.states['start_x'] = 0
         self.states['start_y'] = 0
 
-        self.xmlpath = None
+        self.xml_path = None
 
-    def initialize(self, xmlpath, width_org, height_org, width_display, height_display, do_not_save_xml):
+    def initialize(self, xml_path, width_org, height_org, width_display, height_display, do_not_save_xml):
 
-        if self.xmlpath is not None and not do_not_save_xml:
-            util.save_xml(self.xmlpath, self.__objects, width_org, height_org)
+        if self.xml_path is not None and not do_not_save_xml:
+            util.save_xml(self.xml_path, self.__objects, width_org, height_org)
 
         self.width_org = width_org
         self.height_org = height_org
@@ -299,9 +296,10 @@ class ObjectManager():
         self.states['y'] = 0
         self.states['start_x'] = 0
         self.states['start_y'] = 0
+        self.states['about_mouse'] = {}
 
-        objects, fileread, changed = util.read_xml(xmlpath)
-        self.xmlpath = xmlpath
+        objects, fileread, changed = util.read_xml(xml_path)
+        self.xml_path = xml_path
 
         self.__objects_previous = []
         self.__objects = []
@@ -316,8 +314,14 @@ class ObjectManager():
                 obj = Object(label, x1, y1, x2, y2, width_org, height_org)
                 self.__objects.append(obj)
 
-    def getobjects(self, for_background=False, do_scale=True):
+    def get_objects(self, for_background=False, do_scale=True):
         objects = []
+
+        try:
+            if self.states['about_mouse']['pressed_shift'] :
+                return objects
+        except Exception as e:
+            pass
 
         for object_ in self.__objects:
             label = object_.get_label()
@@ -362,9 +366,9 @@ class ObjectManager():
                 objects.append(obj)
         return objects
 
-    def getdifference(self, other, width_display=0, height_display=0):
-        objects1 = self.getobjects(True, do_scale=False)
-        objects2 = other.getobjects(True, do_scale=False)
+    def get_difference(self, other, width_display=0, height_display=0):
+        objects1 = self.get_objects(True, do_scale=False)
+        objects2 = other.get_objects(True, do_scale=False)
 
         sameobjects = []
         for object1 in objects1:
@@ -427,8 +431,10 @@ class ObjectManager():
 
         return differences
 
-    def mouse_event(self, about_mouse, x, y):
+    def key_input_event(self, about_mouse, x, y):
         changed = False
+
+        self.states['about_mouse'] = about_mouse
 
         org_x = x
         org_y = y
@@ -521,6 +527,9 @@ class ObjectManager():
         else:
             if about_mouse['pressed_left']:
                 if about_mouse['new_rect']:
+                    pass
+
+                elif about_mouse['pressed_shift']:
                     pass
 
                 elif about_mouse['pressed_ctrl']:
