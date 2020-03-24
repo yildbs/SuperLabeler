@@ -84,15 +84,19 @@ class Object():
 
         if util.get_distance(lt, p) < self.circle_small:
             self.selected = True
+            self.x1, self.y1 = x, y
             return self.moved_lt
         elif util.get_distance(rt, p) < self.circle_small:
             self.selected = True
+            self.x2, self.y1 = x, y
             return self.moved_rt
         elif util.get_distance(lb, p) < self.circle_small:
             self.selected = True
+            self.x1, self.y2 = x, y
             return self.moved_lb
         elif util.get_distance(rb, p) < self.circle_small:
             self.selected = True
+            self.x2, self.y2 = x, y
             return self.moved_rb
         return None
 
@@ -299,6 +303,7 @@ class ObjectManager():
         objects, fileread, changed = util.read_xml(xmlpath)
         self.xmlpath = xmlpath
 
+        self.__objects_previous = []
         self.__objects = []
         for label, x1, y1, x2, y2 in objects:
             do_not_add = False
@@ -605,7 +610,6 @@ class ObjectManager():
         obj = Object('@NEW', self.states['x'] - 50, self.states['y'] - 50, self.states['x'] + 50, self.states['y'] + 50, self.width_org, self.height_org)
         self.__objects.append(obj)
 
-
     def set_as_g(self):
         self.keep_current()
         for obj in self.__objects:
@@ -621,10 +625,13 @@ class ObjectManager():
                 obj.reset_property()
 
     def keep_current(self):
-        self.__objects_previous = deepcopy(self.__objects)
+        self.__objects_previous.append(deepcopy(self.__objects))
+        if len(self.__objects_previous) > 30:
+            self.__objects_previous.pop(0)
 
     def undo(self):
-        self.__objects = deepcopy(self.__objects_previous)
+        if len(self.__objects_previous) > 0:
+            self.__objects = deepcopy(self.__objects_previous.pop())
 
     def select_all(self):
         for obj in self.__objects:

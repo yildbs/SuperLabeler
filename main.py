@@ -75,6 +75,8 @@ class MainWindow(QMainWindow, main_form_class):
         self.property_folder_strings.append('is_people_NG')
         self.property_folder_strings.append('is_soldier')
 
+        self.zoom = 2.0
+
         self.property_folder = {}
         for str in self.property_folder_strings:
             self.property_folder[str] = False
@@ -209,6 +211,8 @@ class MainWindow(QMainWindow, main_form_class):
         self.set_count_foregrounds(self.property_paging['current_index_foreground'], len(self.foregrounds) )
         self.set_count_backgrounds(self.property_paging['current_index_background'], len(self.backgrounds) )
 
+        self.zoom = 2.0
+
         if len(self.foregrounds) > 0:
             if self.property_paging['current_index_foreground'] < 0:
                 self.property_paging['current_index_foreground'] = 0
@@ -271,19 +275,19 @@ class MainWindow(QMainWindow, main_form_class):
 
             self.graphicsView_foreground.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_foreground.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.graphicsView_foreground.wheelEvent = lambda e : None
+            self.graphicsView_foreground.wheelEvent = self.wheelEvent
 
             self.graphicsView_background.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_background.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.graphicsView_background.wheelEvent = lambda e : None
+            self.graphicsView_background.wheelEvent = self.wheelEvent
 
             self.graphicsView_diffground.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_diffground.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.graphicsView_diffground.wheelEvent = lambda e : None
+            self.graphicsView_diffground.wheelEvent = self.wheelEvent
 
             self.graphicsView_zoomground.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_zoomground.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.graphicsView_zoomground.wheelEvent = lambda e : None
+            self.graphicsView_zoomground.wheelEvent = self.wheelEvent
 
             size = image.size()
             width_org = size.width()
@@ -336,46 +340,57 @@ class MainWindow(QMainWindow, main_form_class):
         if self.foreground_changed:
             self.foreground_changed = False
 
-            self.scene_foreground.clear()
-            item_foreground = QGraphicsPixmapItem(QPixmap.fromImage(self.foreground_image))
-            self.scene_foreground.addItem(item_foreground)
+            try:
 
-            objects = self.objects_foreground.getobjects()
-            for obj in objects:
-                item_rect = self.DoubleClickableItem(QtCore.QRectF(obj.x1, obj.y1, obj.x2-obj.x1, obj.y2-obj.y1),
-                                                     parent=self,
-                                                     set_label=obj.set_label,
-                                                     get_label=obj.get_label )
-                item_rect.setPen(obj.prop['line_color'])
-                if obj.selected:
-                    item_rect.setBrush(obj.prop['highlight_color'])
-                elif obj.prop['area_fulfil']:
-                    item_rect.setBrush(obj.prop['area_color'])
+                self.scene_foreground.clear()
+                item_foreground = QGraphicsPixmapItem(QPixmap.fromImage(self.foreground_image))
+                self.scene_foreground.addItem(item_foreground)
 
-                # label
-                item_label = QGraphicsTextItem(obj.get_label())
-                item_label.setPos(QtCore.QPoint(obj.x1, obj.y1))
-                item_label.setDefaultTextColor(obj.prop['text_color'])
+                objects = self.objects_foreground.getobjects()
+                for obj in objects:
+                    item_rect = self.DoubleClickableItem(QtCore.QRectF(obj.x1, obj.y1, obj.x2-obj.x1, obj.y2-obj.y1),
+                                                         parent=self,
+                                                         set_label=obj.set_label,
+                                                         get_label=obj.get_label )
+                    item_rect.setPen(obj.prop['line_color'])
+                    if obj.selected:
+                        item_rect.setBrush(obj.prop['highlight_color'])
+                    elif obj.prop['area_fulfil']:
+                        item_rect.setBrush(obj.prop['area_color'])
 
-                item_lt = QGraphicsEllipseItem(obj.x1-obj.prop['vertex_r_lt']/2, obj.y1-obj.prop['vertex_r_lt']/2, obj.prop['vertex_r_lt'], obj.prop['vertex_r_lt']); item_lt.setBrush(obj.prop['vertex_color'])
-                item_rt = QGraphicsEllipseItem(obj.x2-obj.prop['vertex_r_rt']/2, obj.y1-obj.prop['vertex_r_rt']/2, obj.prop['vertex_r_rt'], obj.prop['vertex_r_rt']); item_rt.setBrush(obj.prop['vertex_color'])
-                item_lb = QGraphicsEllipseItem(obj.x1-obj.prop['vertex_r_lb']/2, obj.y2-obj.prop['vertex_r_lb']/2, obj.prop['vertex_r_lb'], obj.prop['vertex_r_lb']); item_lb.setBrush(obj.prop['vertex_color'])
-                item_rb = QGraphicsEllipseItem(obj.x2-obj.prop['vertex_r_rb']/2, obj.y2-obj.prop['vertex_r_rb']/2, obj.prop['vertex_r_rb'], obj.prop['vertex_r_rb']); item_rb.setBrush(obj.prop['vertex_color'])
+                    # label
+                    item_label = QGraphicsTextItem(obj.get_label())
+                    item_label.setPos(QtCore.QPoint(obj.x1, obj.y1))
+                    item_label.setDefaultTextColor(obj.prop['text_color'])
 
-                # add
-                self.scene_foreground.addItem(item_rect)
-                self.scene_foreground.addItem(item_label)
+                    item_lt = QGraphicsEllipseItem(obj.x1-obj.prop['vertex_r_lt']/2, obj.y1-obj.prop['vertex_r_lt']/2, obj.prop['vertex_r_lt'], obj.prop['vertex_r_lt']); item_lt.setBrush(obj.prop['vertex_color'])
+                    item_rt = QGraphicsEllipseItem(obj.x2-obj.prop['vertex_r_rt']/2, obj.y1-obj.prop['vertex_r_rt']/2, obj.prop['vertex_r_rt'], obj.prop['vertex_r_rt']); item_rt.setBrush(obj.prop['vertex_color'])
+                    item_lb = QGraphicsEllipseItem(obj.x1-obj.prop['vertex_r_lb']/2, obj.y2-obj.prop['vertex_r_lb']/2, obj.prop['vertex_r_lb'], obj.prop['vertex_r_lb']); item_lb.setBrush(obj.prop['vertex_color'])
+                    item_rb = QGraphicsEllipseItem(obj.x2-obj.prop['vertex_r_rb']/2, obj.y2-obj.prop['vertex_r_rb']/2, obj.prop['vertex_r_rb'], obj.prop['vertex_r_rb']); item_rb.setBrush(obj.prop['vertex_color'])
 
-                self.scene_foreground.addItem(item_lt)
-                self.scene_foreground.addItem(item_rt)
-                self.scene_foreground.addItem(item_lb)
-                self.scene_foreground.addItem(item_rb)
+                    # add
+                    self.scene_foreground.addItem(item_rect)
+                    self.scene_foreground.addItem(item_label)
+
+                    self.scene_foreground.addItem(item_lt)
+                    self.scene_foreground.addItem(item_rt)
+                    self.scene_foreground.addItem(item_lb)
+                    self.scene_foreground.addItem(item_rb)
+            except Exception as e:
+                print(e)
 
             ###### zoom
             try:
+                width_display = 201
+                height_display = 201
+
+                r_width = (width_display - 1) / 2
+                r_height = (height_display - 1) / 2
+                r_width, r_height = r_width / self.zoom , r_height / self.zoom
+
                 self.scene_zoomground.clear()
-                rect = QtCore.QRect(self.about_mouse['current_x'] - 51, self.about_mouse['current_y'] - 51, 101, 101)
-                item_zoomground = QGraphicsPixmapItem(QPixmap.fromImage(self.foreground_image.copy(rect).scaled(201, 201)))
+                rect = QtCore.QRect(self.about_mouse['current_x'] - r_width - 1, self.about_mouse['current_y'] - r_height -1, r_width * 2 + 1, r_height * 2 + 1)
+                item_zoomground = QGraphicsPixmapItem(QPixmap.fromImage(self.foreground_image.copy(rect).scaled(width_display, height_display)))
 
                 item_vertical = QGraphicsLineItem(101, 0, 101, 201)
                 item_vertical.setPen(QColor("Red"))
@@ -384,6 +399,7 @@ class MainWindow(QMainWindow, main_form_class):
                 self.scene_zoomground.addItem(item_zoomground)
                 self.scene_zoomground.addItem(item_vertical)
                 self.scene_zoomground.addItem(item_horizontal)
+
             except Exception as e:
                 print(e)
 
@@ -493,6 +509,9 @@ class MainWindow(QMainWindow, main_form_class):
             except Exception as e:
                 pass
 
+        elif key == Qt.Key_Return:
+            self.refresh()
+
     def focusNextPrevChild(self, bool): # tab key
         self.go_to_next_backgground()
         return False
@@ -531,6 +550,8 @@ class MainWindow(QMainWindow, main_form_class):
 
         self.functions['ctrlz'] = self.undo
         self.functions['ctrla'] = self.select_all
+
+        self.functions['-'] = lambda : sys.stdout.flush()
 
         for index, string in enumerate(self.property_folder_strings):
             self.functions[str(index+1)] = (lambda s: (lambda: self.toggle_property(s)))(string)
@@ -665,6 +686,20 @@ class MainWindow(QMainWindow, main_form_class):
     def select_all(self):
         self.objects_foreground.select_all()
         self.foreground_changed = True
+
+    def set_zoom(self, increment):
+        if increment:
+            self.zoom *= 1.3
+        else:
+            self.zoom /= 1.3
+        self.zoom = min(max(self.zoom, 1.), 6.)
+        self.foreground_changed = True
+
+    def wheelEvent(self, QWheelEvent):
+        if QWheelEvent.angleDelta().y() > 0:
+            self.set_zoom(True)
+        else:
+            self.set_zoom(False)
 
 
 if __name__ == "__main__":
