@@ -9,6 +9,9 @@ from PyQt5 import uic, QtCore, QtGui, QtWidgets
 import time
 from copy import deepcopy
 import objectmanager
+import numpy as np
+import cv2
+
 
 main_form_class = uic.loadUiType('Form2.ui')[0]
 
@@ -36,9 +39,6 @@ class MainWindow(QMainWindow, main_form_class):
         self.objects_foreground = objectmanager.ObjectManager()
         self.objects_background = objectmanager.ObjectManager()
 
-        self.ctrl_pressed = False
-        self.shift_pressed = False
-
         self.scene_foreground = QGraphicsScene()
         self.graphicsView_foreground.setScene(self.scene_foreground)
         self.foreground_changed = False
@@ -55,16 +55,24 @@ class MainWindow(QMainWindow, main_form_class):
         self.graphicsView_zoomground.setScene(self.scene_zoomground)
         self.zoomground_changed = False
 
-        self.about_mouse = {}
-        self.about_mouse['pressed_left'] = False
-        self.about_mouse['pressed_right'] = False
-        self.about_mouse['pressed_ctrl'] = False
-        self.about_mouse['new_rect'] = False
-        self.about_mouse['current_x'] = 0
-        self.about_mouse['current_y'] = 0
+        self.scene_roiground = QGraphicsScene()
+        self.graphicsView_roiground.setScene(self.scene_roiground)
+        self.roiground_changed = False
 
-        self.about_mouse['pressed_ctrl'] = False
-        self.about_mouse['pressed_shift'] = False
+        self.drawing_path = QPainterPath()
+
+        self.states_key_input = {}
+        self.states_key_input['pressed_left'] = False
+        self.states_key_input['pressed_right'] = False
+        self.states_key_input['pressed_ctrl'] = False
+        self.states_key_input['new_rect'] = False
+        self.states_key_input['current_x'] = 0
+        self.states_key_input['current_y'] = 0
+
+        self.states_key_input['pressed_ctrl'] = False
+        self.states_key_input['pressed_shift'] = False
+        self.states_key_input['pressed_alt'] = False
+        self.states_key_input['slow_mode'] = False
 
         self.property_paging = {}
         self.property_paging['current_index_foreground'] = 0
@@ -115,10 +123,15 @@ class MainWindow(QMainWindow, main_form_class):
         self.listWidget_foregrounds.keyReleaseEvent = self.key_release_event
 
         # multithreading
-        self.timer = QTimer()
-        self.timer.setInterval(30)
-        self.timer.timeout.connect(self.thread_refresh_display)
-        self.timer.start()
+        self.timer_display_thread = QTimer()
+        self.timer_display_thread.setInterval(30)
+        self.timer_display_thread.timeout.connect(self.thread_refresh_display)
+        self.timer_display_thread.start()
+
+        # self.timer_key_pressed = QTimer()
+        # self.timer_key_pressed.setInterval(30)
+        # self.timer_key_pressed.timeout.connect(self.check_modifiers)
+        # self.timer_key_pressed.start()
 
     def set_count_foregrounds(self, index, total):
         if total > 0:
@@ -286,6 +299,7 @@ class MainWindow(QMainWindow, main_form_class):
             self.graphicsView_foreground.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_foreground.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_foreground.wheelEvent = self.wheel_event
+            self.graphicsView_foreground.paintEvent = self.paint_event
 
             self.graphicsView_background.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_background.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -299,11 +313,15 @@ class MainWindow(QMainWindow, main_form_class):
             self.graphicsView_zoomground.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.graphicsView_zoomground.wheelEvent = self.wheel_event
 
+            self.graphicsView_roiground.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.graphicsView_roiground.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.graphicsView_roiground.wheelEvent = self.wheel_event
+
             size = image.size()
             width_org = size.width()
             height_org = size.height()
 
-            self.objects_foreground.initialize(self.current_foreground_path.replace('jpg', 'xml'), width_org, height_org, 960, 540, self.fg_bg_converted)
+            self.objects_foreground.initialize(self.current_foreground_path.replace('jpg', 'xml'), self.current_foreground_path, width_org, height_org, 960, 540, self.fg_bg_converted)
 
             self.foreground_image = image.scaled(960, 540)
 
@@ -320,7 +338,7 @@ class MainWindow(QMainWindow, main_form_class):
             width_org = size.width()
             height_org = size.height()
 
-            self.objects_background.initialize(self.current_background_path.replace('jpg', 'xml'), width_org, height_org, 480, 270, do_not_save_xml=True)
+            self.objects_background.initialize(self.current_background_path.replace('jpg', 'xml'), self.current_background_path, width_org, height_org, 480, 270, do_not_save_xml=True)
             self.background_image = image.scaled(480, 270)
 
             self.background_changed = True
@@ -353,8 +371,17 @@ class MainWindow(QMainWindow, main_form_class):
             self.foreground_changed = False
             try:
                 self.scene_foreground.clear()
+
                 item_foreground = QGraphicsPixmapItem(QPixmap.fromImage(self.foreground_image))
                 self.scene_foreground.addItem(item_foreground)
+
+                if self.states_key_input['pressed_shift']:
+                    try:
+                        item = QGraphicsPathItem(self.drawing_path)
+                        item.setPen(QPen(QColor(121,252,50,50), self.objects_foreground.extractor.radius_brush*2, Qt.SolidLine))
+                        self.scene_foreground.addItem(item)
+                    except Exception as e:
+                        print(e)
 
                 objects = self.objects_foreground.get_objects()
                 for obj in objects:
@@ -386,6 +413,7 @@ class MainWindow(QMainWindow, main_form_class):
                     self.scene_foreground.addItem(item_rt)
                     self.scene_foreground.addItem(item_lb)
                     self.scene_foreground.addItem(item_rb)
+
             except Exception as e:
                 print(e)
 
@@ -399,7 +427,7 @@ class MainWindow(QMainWindow, main_form_class):
                 r_width, r_height = r_width / self.zoom , r_height / self.zoom
 
                 self.scene_zoomground.clear()
-                rect = QtCore.QRect(self.about_mouse['current_x'] - r_width - 1, self.about_mouse['current_y'] - r_height -1, r_width * 2 + 1, r_height * 2 + 1)
+                rect = QtCore.QRect(self.states_key_input['current_x'] - r_width - 1, self.states_key_input['current_y'] - r_height -1, r_width * 2 + 1, r_height * 2 + 1)
                 item_zoomground = QGraphicsPixmapItem(QPixmap.fromImage(self.foreground_image.copy(rect).scaled(width_display, height_display)))
 
                 item_vertical = QGraphicsLineItem(101, 0, 101, 201)
@@ -409,9 +437,20 @@ class MainWindow(QMainWindow, main_form_class):
                 self.scene_zoomground.addItem(item_zoomground)
                 self.scene_zoomground.addItem(item_vertical)
                 self.scene_zoomground.addItem(item_horizontal)
-
             except Exception as e:
                 print(e)
+
+            try:
+                self.scene_roiground.clear()
+                roi = self.objects_foreground.get_roi()
+                if roi is not None:
+                    roi.arrange()
+                    if roi.area() > 0:
+                        rect = QtCore.QRect(roi.x1, roi.y1, roi.x2-roi.x1, roi.y2-roi.y1)
+                        item_roiground = QGraphicsPixmapItem(QPixmap.fromImage(self.foreground_image.copy(rect).scaled(201, 201, Qt.KeepAspectRatio)))
+                        self.scene_roiground.addItem(item_roiground)
+            except Exception as e:
+                self.scene_roiground.clear()
 
             if self.property_folder['for_yolobgs'] and len(self.backgrounds) > 0:
                 differences = self.objects_foreground.get_difference(self.objects_background, 480, 270)
@@ -421,7 +460,6 @@ class MainWindow(QMainWindow, main_form_class):
                     self.diffground_image = self.background_image.copy()
                     painter = QPainter(self.diffground_image)
                     painter.drawImage(0, 0, self.foreground_image.scaled(480, 270))
-                    # painter.drawImage(0, 0, self.background_image.scaled(480, 270))
                     painter.end()
 
                     item_diffground = QGraphicsPixmapItem(QPixmap.fromImage(self.diffground_image))
@@ -471,17 +509,23 @@ class MainWindow(QMainWindow, main_form_class):
     def set_text_zoom(self):
         self.label_zoom.setText('(%.2f)'%(self.zoom))
 
+    def set_text_command(self, text):
+        self.label_command.setText(text)
+
+
+
     ####################################################
     # mouse & keyboard
     ####################################################
     def on_mouse_moved(self, p):
         x = p.scenePos().x()
         y = p.scenePos().y()
-        self.about_mouse['current_x'], self.about_mouse['current_y'] = x, y
-
-        _, states = self.objects_foreground.key_input_event(self.about_mouse, x, y)
-
+        self.states_key_input['current_x'], self.states_key_input['current_y'] = x, y
+        _, states = self.objects_foreground.key_input_event(self.states_key_input, x, y)
         self.set_text_cursor_pos(states['x'], states['y'])
+
+        if self.states_key_input['pressed_left'] and self.states_key_input['pressed_shift']:
+            self.drawing_path.lineTo(p.scenePos())
 
         if states['dragging_left'] or states['dragging_right']:
             self.set_text_cursor_start(states['start_x'], states['start_y'])
@@ -495,12 +539,14 @@ class MainWindow(QMainWindow, main_form_class):
     def on_mouse_pressed(self, p):
         x = p.scenePos().x()
         y = p.scenePos().y()
-        self.about_mouse['current_x'], self.about_mouse['current_y'] = x, y
+        self.states_key_input['current_x'], self.states_key_input['current_y'] = x, y
+        self.drawing_path = QPainterPath()
+        self.drawing_path.moveTo(p.scenePos())
 
-        if p.button() == 1: self.about_mouse['pressed_left'] = True
-        elif p.button() == 2: self.about_mouse['pressed_right'] = True
+        if p.button() == 1: self.states_key_input['pressed_left'] = True
+        elif p.button() == 2: self.states_key_input['pressed_right'] = True
 
-        self.foreground_changed, states = self.objects_foreground.key_input_event(self.about_mouse, x, y)
+        self.foreground_changed, states = self.objects_foreground.key_input_event(self.states_key_input, x, y)
 
         for combo in self.comboboxes:
             combo.close()
@@ -510,31 +556,34 @@ class MainWindow(QMainWindow, main_form_class):
     def on_mouse_released(self, p):
         x = p.scenePos().x()
         y = p.scenePos().y()
-        self.about_mouse['current_x'], self.about_mouse['current_y'] = x, y
+        self.states_key_input['current_x'], self.states_key_input['current_y'] = x, y
+        self.drawing_path = QPainterPath()
 
-        if p.button() == 1: self.about_mouse['pressed_left'] = False
-        elif p.button() == 2: self.about_mouse['pressed_right'] = False
+        if p.button() == 1: self.states_key_input['pressed_left'] = False
+        elif p.button() == 2: self.states_key_input['pressed_right'] = False
 
-        self.foreground_changed, states = self.objects_foreground.key_input_event(self.about_mouse, x, y)
+        self.foreground_changed, states = self.objects_foreground.key_input_event(self.states_key_input, x, y)
 
     def key_press_event(self, p):
-        self.ctrl_pressed = p.modifiers() == Qt.ControlModifier
-        self.about_mouse['pressed_ctrl'] = self.ctrl_pressed
-
-        self.shift_pressed = p.modifiers() == Qt.ShiftModifier
-        self.about_mouse['pressed_shift'] = self.shift_pressed
-
-        self.foreground_changed, states = self.objects_foreground.key_input_event(self.about_mouse, self.about_mouse['current_x'], self.about_mouse['current_y'])
+        self.check_modifiers(p)
+        self.set_text_command('')
+        self.foreground_changed, states = self.objects_foreground.key_input_event(self.states_key_input, self.states_key_input['current_x'], self.states_key_input['current_y'])
 
         key = p.key()
         if Qt.Key_0 <= key <= Qt.Key_9 or Qt.Key_A <= key <= Qt.Key_Z or key == Qt.Key_Space:
             try:
                 prefix = ''
-                if self.ctrl_pressed:
+                if self.states_key_input['pressed_ctrl']:
                     prefix = 'ctrl'
-                elif self.shift_pressed:
+                elif self.states_key_input['pressed_shift']:
                     prefix = 'shift'
+                elif self.states_key_input['pressed_alt']:
+                    prefix = 'alt'
+
                 full_key = prefix + QKeySequence(key).toString().lower()
+
+                self.set_text_command(full_key)
+
                 self.functions[full_key]()
             except Exception as e:
                 pass
@@ -544,19 +593,32 @@ class MainWindow(QMainWindow, main_form_class):
 
         self.foreground_changed = True
 
-
     def focus_next_prev_child(self, bool): # tab key
         self.go_to_next_backgground()
         return False
 
     def key_release_event(self, p):
-        self.ctrl_pressed = p.modifiers() == Qt.ControlModifier
-        self.about_mouse['pressed_ctrl'] = self.ctrl_pressed
-
-        self.shift_pressed = p.modifiers() == Qt.ShiftModifier
-        self.about_mouse['pressed_shift'] = self.shift_pressed
-
+        self.check_modifiers(p, False)
         self.foreground_changed = True
+
+    def check_modifiers(self, p, pressed=True):
+        slow_mode = False
+        pressed_ctrl = False
+        pressed_shift = False
+        pressed_alt = False
+        if p.text() == 's':
+            slow_mode = pressed
+        if p.modifiers() == Qt.ControlModifier:
+            pressed_ctrl = pressed
+        if p.modifiers() == Qt.ShiftModifier:
+            pressed_shift = pressed
+        if p.modifiers() == Qt.AltModifier:
+            pressed_alt = pressed
+
+        self.states_key_input['slow_mode'] = slow_mode
+        self.states_key_input['pressed_ctrl'] = pressed_ctrl
+        self.states_key_input['pressed_shift'] = pressed_shift
+        self.states_key_input['pressed_alt'] = pressed_alt
 
     #####################################################################################
     # shortcut functions
@@ -737,8 +799,14 @@ class MainWindow(QMainWindow, main_form_class):
     def wheel_event(self, e):
         if e.angleDelta().y() > 0:
             self.set_zoom(True)
+            self.set_text_command('Wheel\nUp')
         else:
             self.set_zoom(False)
+            self.set_text_command('Wheel\nDown')
+
+    def paint_event(self, event):
+        pass
+
 
 
 if __name__ == "__main__":
