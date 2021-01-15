@@ -3,16 +3,11 @@ import os
 import glob
 import shutil
 from PyQt5.QtWidgets import *
-from PyQt5.QtCore import QDir, Qt, QTimer, QObject, QEvent
+from PyQt5.QtCore import QDir, Qt, QTimer
 from PyQt5.QtGui import *
-from PyQt5 import uic, QtCore, QtGui, QtWidgets
-import time
-from copy import deepcopy
-# import SuperLabeler.objectmanager
-from SuperLabeler import objectmanager
-# import objectmanager
-import numpy as np
-import cv2
+from PyQt5 import uic, QtCore
+# from SuperLabeler import objectmanager
+import objectmanager
 
 
 main_form_class = uic.loadUiType('MainForm.ui')[0]
@@ -25,7 +20,7 @@ class MainWindow(QMainWindow, main_form_class):
         self.setWindowTitle("Super Labeler")
 
         #Initialize GUI
-        self.lineEdit_BaseDirectory.setText('/home/yildbs/Train/')
+        # self.lineEdit_BaseDirectory.setText('/home/yildbs/Train/')
 
         #Initialize variables
         self.tree = self.treeView_directory_tree
@@ -144,6 +139,9 @@ class MainWindow(QMainWindow, main_form_class):
 
     def refresh(self):
         basedir = self.lineEdit_BaseDirectory.text()
+        if basedir is None:
+            return
+
         basedir = basedir.replace('\\', '/', len(basedir))
 
         def on_directory_loaded():

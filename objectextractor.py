@@ -1,9 +1,7 @@
 import numpy as np
 import cv2
-from PyQt5.QtCore import QDir, Qt, QTimer, QObject, QEvent
 import sys
 from copy import deepcopy
-import math
 
 
 class ObjectExtractor:

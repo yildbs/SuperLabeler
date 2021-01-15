@@ -2,6 +2,7 @@ import xml.etree.ElementTree as ET
 import math
 from bs4 import BeautifulSoup
 
+
 def make_xml_annotation(image_width, image_height):
     xml_annotation = ET.Element("annotation")
     xml_source = ET.SubElement(xml_annotation, 'source')

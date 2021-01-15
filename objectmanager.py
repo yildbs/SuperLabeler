@@ -5,8 +5,10 @@ import math
 import sys
 import cv2
 import random
-from SuperLabeler import objectextractor
-from SuperLabeler import util
+# from SuperLabeler import objectextractor
+# from SuperLabeler import util
+import objectextractor
+import util
 
 
 class Object():
