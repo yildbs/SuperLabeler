@@ -1,12 +1,12 @@
 from threading import Thread, Lock
 from copy import deepcopy
-import util
 from PyQt5.QtGui import QColor
 import math
 import sys
-import objectextractor
 import cv2
-import keyboard
+import random
+from SuperLabeler import objectextractor
+from SuperLabeler import util
 
 
 class Object():
@@ -327,6 +327,7 @@ class ObjectManager():
 
             if not do_not_add:
                 obj = Object(label, x1, y1, x2, y2, width_org, height_org)
+                obj.selected = True
                 self.__objects.append(obj)
 
         self.initialized = True
@@ -557,7 +558,13 @@ class ObjectManager():
                     for obj in self.__objects:
                         if obj.click_area(x, y) is not None:
                             break
-                    self.delete_selected()
+                    if not self.delete_selected():
+                        width_half = random.randint(20, 100)
+                        height_half = random.randint(20, 100)
+                        new_obj = Object('nothing', x-width_half, y-height_half, x+width_half, y+height_half, self.width_org, self.height_org)
+                        new_obj.selected = True
+                        self.__objects.append(new_obj)
+
 
             changed = True
         elif self.states_command['drawing_mask']:
@@ -653,7 +660,9 @@ class ObjectManager():
 
     def delete_selected(self):
         self.keep_current()
+        len_prev = len(self.__objects)
         self.__objects = [obj for obj in self.__objects if not obj.selected]
+        return True if len_prev != len(self.__objects) else False
 
     def copy_selected(self):
         self.__objects_copied = deepcopy([obj for obj in self.__objects if obj.selected])

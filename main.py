@@ -8,12 +8,15 @@ from PyQt5.QtGui import *
 from PyQt5 import uic, QtCore, QtGui, QtWidgets
 import time
 from copy import deepcopy
-import objectmanager
+# import SuperLabeler.objectmanager
+from SuperLabeler import objectmanager
+# import objectmanager
 import numpy as np
 import cv2
 
 
-main_form_class = uic.loadUiType('Form2.ui')[0]
+main_form_class = uic.loadUiType('MainForm.ui')[0]
+
 
 class MainWindow(QMainWindow, main_form_class):
     def __init__(self):
@@ -68,7 +71,6 @@ class MainWindow(QMainWindow, main_form_class):
         self.states_key_input['new_rect'] = False
         self.states_key_input['current_x'] = 0
         self.states_key_input['current_y'] = 0
-
         self.states_key_input['pressed_ctrl'] = False
         self.states_key_input['pressed_shift'] = False
         self.states_key_input['pressed_alt'] = False
@@ -128,11 +130,6 @@ class MainWindow(QMainWindow, main_form_class):
         self.timer_display_thread.timeout.connect(self.thread_refresh_display)
         self.timer_display_thread.start()
 
-        # self.timer_key_pressed = QTimer()
-        # self.timer_key_pressed.setInterval(30)
-        # self.timer_key_pressed.timeout.connect(self.check_modifiers)
-        # self.timer_key_pressed.start()
-
     def set_count_foregrounds(self, index, total):
         if total > 0:
             self.label_count_foregrounds.setText('(%d / %d)' %(index+1, total))
@@ -147,6 +144,7 @@ class MainWindow(QMainWindow, main_form_class):
 
     def refresh(self):
         basedir = self.lineEdit_BaseDirectory.text()
+        basedir = basedir.replace('\\', '/', len(basedir))
 
         def on_directory_loaded():
             self.tree.expandAll()
@@ -511,7 +509,6 @@ class MainWindow(QMainWindow, main_form_class):
 
     def set_text_command(self, text):
         self.label_command.setText(text)
-
 
 
     ####################################################

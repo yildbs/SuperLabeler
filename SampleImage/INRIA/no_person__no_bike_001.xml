@@ -1,0 +1,19 @@
+<annotation>
+  <source>
+    <database>Unknown</database>
+  </source>
+  <size>
+    <width>480</width>
+    <height>640</height>
+  </size>
+  <segmented>0</segmented>
+  <object>
+    <name>bike</name>
+    <bndbox>
+      <xmin>52</xmin>
+      <ymin>39</ymin>
+      <xmax>568</xmax>
+      <ymax>416</ymax>
+    </bndbox>
+  </object>
+</annotation>
